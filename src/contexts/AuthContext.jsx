@@ -90,10 +90,13 @@
 // };
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import axios from 'axios';
+import axios from '../../src/services/axiosConfig';
 import toast from 'react-hot-toast';
 
 const AuthContext = createContext();
+
+
+
 
 export const useAuth = () => {
     const context = useContext(AuthContext);
@@ -109,6 +112,7 @@ export const AuthProvider = ({ children }) => {
 
     // Set up axios defaults
     useEffect(() => {
+        axios.defaults.baseURL = import.meta.env.VITE_API_BASE_URL;
         const token = localStorage.getItem('token');
         if (token) {
             axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;

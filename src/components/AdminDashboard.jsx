@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { Users, UserPlus, Edit, Trash2, LogOut } from 'lucide-react';
-import axios from 'axios';
+import axios from '../services/axiosConfig';
 import toast from 'react-hot-toast';
 import { useForm } from 'react-hook-form';
 
@@ -17,6 +17,8 @@ const AdminDashboard = () => {
         fetchEmployees();
     }, []);
 
+
+
     const fetchEmployees = async () => {
         try {
             const response = await axios.get('/api/employees');
@@ -30,7 +32,14 @@ const AdminDashboard = () => {
 
     const createEmployee = async (data) => {
         try {
-            await axios.post('/api/auth/register', data);
+
+            const employeData={
+                ...data, role: 'employee' 
+            }
+
+            await axios.post('/api/auth/register', employeData);
+
+
             toast.success('Employee created successfully');
             fetchEmployees();
             setShowCreateModal(false);
@@ -41,8 +50,16 @@ const AdminDashboard = () => {
     };
 
     const updateEmployee = async (data) => {
-        try {
-            await axios.put(`/api/employees/${editingEmployee._id}`, data);
+        try 
+        {
+
+            const filterData={
+                ...data,
+
+            }
+
+
+            await axios.put(`/api/employees/${editingEmployee._id}`, filterData);
             toast.success('Employee updated successfully');
             fetchEmployees();
             setEditingEmployee(null);
@@ -53,7 +70,7 @@ const AdminDashboard = () => {
     };
 
     const deleteEmployee = async (id) => {
-        if (window.confirm('Are you sure you want to delete this employee?')) {
+        if (window.confirm('Are you sure you want to delete this Campany?')) {
             try {
                 await axios.delete(`/api/employees/${id}`);
                 toast.success('Employee deleted successfully');
@@ -101,14 +118,14 @@ const AdminDashboard = () => {
                     <div className="flex justify-between items-center mb-6">
                         <h2 className="text-2xl font-bold text-gray-900 flex items-center">
                             <Users className="w-8 h-8 mr-3 text-indigo-600" />
-                            Employees
+                            Campany
                         </h2>
                         <button
                             onClick={() => setShowCreateModal(true)}
                             className="flex items-center px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700"
                         >
                             <UserPlus className="w-4 h-4 mr-2" />
-                            Add Employee
+                            Add Campany
                         </button>
                     </div>
 
@@ -168,7 +185,7 @@ const AdminDashboard = () => {
                 <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
                     <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
                         <h3 className="text-lg font-bold text-gray-900 mb-4">
-                            {editingEmployee ? 'Edit Employee' : 'Create Employee'}
+                            {editingEmployee ? 'Edit Campany' : 'Create Campany'}
                         </h3>
                         <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-4">
                             <div>

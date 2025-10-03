@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useAuth } from '../contexts/AuthContext';
 import { Shield, Eye, EyeOff } from 'lucide-react';
-
+import axios from "../services/axiosConfig"
 const Login = () => {
     const { register, handleSubmit, formState: { errors } } = useForm();
     const { login } = useAuth();
@@ -111,17 +111,7 @@ const Login = () => {
                         </button>
                     </div>
 
-                    <div className="text-center">
-                        <div className="text-sm text-gray-600">
-                            Demo Credentials:
-                            <div className="mt-2 space-y-1 text-xs">
-                                <div><strong>Admin:</strong> admin@test.com / admin123</div>
-                                <div><strong>Employee:</strong> employee@test.com / emp123</div>
-                                <div><strong>Guard:</strong> guard@test.com / guard123</div>
-                                <div className="mt-2"><strong>Phone Login:</strong> 1234567890 / yourpassword</div>
-                            </div>
-                        </div>
-                    </div>
+               
                 </form>
             </div>
         </div>

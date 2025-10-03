@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import * as XLSX from 'xlsx';
 import {
     Users, UserPlus, Edit, Trash2, LogOut, QrCode, FileText, Clock,
     Shield, MapPin, Calendar, BarChart3, AlertTriangle, Target,
@@ -7,9 +8,19 @@ import {
     Download, Upload, Filter, Search, Eye, Settings, Bell, MessageSquare  ,  ChevronLeft, 
     ChevronRight,
 } from 'lucide-react';
-import axios from 'axios';
+import axios from "../services/axiosConfig"
 import toast from 'react-hot-toast';
 import { useForm, useFieldArray } from 'react-hook-form';
+import moment from 'moment-timezone';
+
+const [essentialDataLoading, setEssentialDataLoading] = useState({
+    guards: false,
+    qrCodes: false,
+    shifts: false
+});
+
+// Timezone configuration - adjust based on your requirements
+const APP_TIMEZONE = 'Asia/Kolkata'; // Change to your preferred timezone
 
 const SupervisorDashboard = () => {
 
@@ -44,6 +55,13 @@ const SupervisorDashboard = () => {
         dateRange: '',
         type: ''
     });
+
+
+
+
+
+
+    
 const [guardReports, setGuardReports] = useState([]);
     const [selectedGuard, setSelectedGuard] = useState('');
     const [reportFilters, setReportFilters] = useState({
@@ -57,6 +75,213 @@ const [guardReports, setGuardReports] = useState([]);
         control,
         name: 'checkpoints'
     });
+
+    const utcToLocalDateTime = (utcTimeString) => {
+        if (!utcTimeString) return '';
+
+        return moment.utc(utcTimeString).local().format('YYYY-MM-DDTHH:mm');
+    };
+
+    // Convert local datetime to UTC for backend
+    const localToUTCDateTime = (localTimeString) => {
+        if (!localTimeString) return '';
+
+        return moment(localTimeString).utc().format();
+    };
+
+
+    // Format for display with timezone
+    const formatDateTimeForDisplay = (utcTimeString, timezone = APP_TIMEZONE) => {
+        if (!utcTimeString) return 'N/A';
+
+        return moment.utc(utcTimeString).tz(timezone).format('MMM DD, YYYY hh:mm A z');
+    };
+
+    // Format time only for display
+    const formatTimeForDisplay = (utcTimeString, timezone = APP_TIMEZONE) => {
+        if (!utcTimeString) return 'N/A';
+
+        return moment.utc(utcTimeString).tz(timezone).format('hh:mm A z');
+    };
+
+
+
+    const downloadExcelReport = (report) => {
+        try {
+            // Validate report data
+            if (!report) {
+                toast.error('No report data available to download');
+                return;
+            }
+
+            // Create workbook
+            const workbook = XLSX.utils.book_new();
+
+            // 1. Summary Sheet
+            const summaryData = [
+                ['GUARD PERFORMANCE REPORT'],
+                [],
+                ['Basic Information'],
+                ['Guard Name', report.guard?.name || 'N/A'],
+                ['Phone Number', report.guard?.phone || 'N/A'],
+                ['Report Period', `${new Date(report.reportPeriod?.startDate).toLocaleDateString()} - ${new Date(report.reportPeriod?.endDate).toLocaleDateString()}`],
+                ['Total Days', report.reportPeriod?.totalDays || 0],
+                [],
+                ['Performance Overview'],
+                // ['Overall Score', `${report.performance?.overallScore || '0'}%`],
+                // ['Performance Rating', report.performance?.rating || 'N/A'],
+                ['Efficiency', report.summary?.efficiency || '0%'],
+                [],
+                // ['Attendance Summary'],
+                // ['Present Days', report.attendance?.presentDays || 0],
+                // ['Total Days', report.attendance?.totalDays || 0],
+                // ['Attendance Rate', report.attendance?.attendanceRate || '0%'],
+                [],
+                // ['Rounds Performance'],
+                ['Total Scans', report.roundsPerformance?.summary?.totalScans || 0],
+                ['Completed Scans', report.roundsPerformance?.summary?.completedScans || 0],
+                ['Scan Completion Rate', `${((report.roundsPerformance?.summary?.completedScans || 0) / (report.roundsPerformance?.summary?.totalScans || 1) * 100).toFixed(1)}%`],
+            ];
+
+            const summarySheet = XLSX.utils.aoa_to_sheet(summaryData);
+
+            // Style summary sheet - merge title row
+            if (!summarySheet['!merges']) summarySheet['!merges'] = [];
+            summarySheet['!merges'].push({ s: { r: 0, c: 0 }, e: { r: 0, c: 7 } });
+
+            // Set column widths for summary sheet
+            summarySheet['!cols'] = [
+                { wch: 25 }, // First column width
+                { wch: 20 }  // Second column width
+            ];
+
+            XLSX.utils.book_append_sheet(workbook, summarySheet, 'Summary');
+
+            // 2. Detailed Rounds Sheet (only if data exists)
+            if (report.detailedRounds && report.detailedRounds.length > 0) {
+                const roundsHeader = [
+                    'Date',
+                    'Round Number',
+                    'Plan Name',
+                    'Checkpoint Name',
+                    'Checkpoint Description',
+                    'Actual Scan Time',
+                    'Status'
+                ];
+
+                const roundsData = report.detailedRounds.map(round => [
+                    new Date(round.date).toLocaleDateString(),
+                    `Round ${round.roundNumber}`,
+                    round.planName || 'N/A',
+                    round.checkpointName || 'N/A',
+                    round.checkpointDescription || 'N/A',
+                    round.actualTime ? new Date(round.actualTime).toLocaleTimeString() : 'Not Scanned',
+                    round.status ? round.status.charAt(0).toUpperCase() + round.status.slice(1) : 'Pending'
+                ]);
+
+                const roundsSheet = XLSX.utils.aoa_to_sheet([roundsHeader, ...roundsData]);
+
+                // Set column widths for rounds sheet
+                roundsSheet['!cols'] = [
+                    { wch: 12 }, // Date
+                    { wch: 15 }, // Round Number
+                    { wch: 20 }, // Plan Name
+                    { wch: 20 }, // Checkpoint Name
+                    { wch: 25 }, // Checkpoint Description
+                    { wch: 15 }, // Actual Time
+                    { wch: 12 }  // Status
+                ];
+
+                XLSX.utils.book_append_sheet(workbook, roundsSheet, 'Patrol Rounds');
+            }
+
+            // 3. Performance Metrics Sheet
+            const metricsData = [
+                ['PERFORMANCE METRICS'],
+                [],
+                ['Category', 'Score', 'Rating'],
+                ['Overall Performance', `${report.performance?.overallScore || '0'}%`, report.performance?.rating || 'N/A'],
+                ['Attendance', `${report.performance?.breakdown?.attendanceScore || '0'}%`, getPerformanceRating(report.performance?.breakdown?.attendanceScore)],
+                ['Rounds Completion', `${report.performance?.breakdown?.roundsScore || '0'}%`, getPerformanceRating(report.performance?.breakdown?.roundsScore)],
+                ['Efficiency', report.summary?.efficiency || '0%', getPerformanceRating(parseInt(report.summary?.efficiency))],
+            ];
+
+            const metricsSheet = XLSX.utils.aoa_to_sheet(metricsData);
+            metricsSheet['!cols'] = [
+                { wch: 25 },
+                { wch: 15 },
+                { wch: 15 }
+            ];
+            XLSX.utils.book_append_sheet(workbook, metricsSheet, 'Metrics');
+
+            // Generate filename and download
+            const guardName = report.guard?.name?.replace(/\s+/g, '_') || 'Unknown_Guard';
+            const period = new Date().toISOString().split('T')[0];
+            const fileName = `Guard_Performance_Report_${guardName}_${period}.xlsx`;
+
+            XLSX.writeFile(workbook, fileName);
+            toast.success('Report downloaded successfully!');
+
+        } catch (error) {
+            console.error('Error downloading report:', error);
+            toast.error('Failed to download report');
+        }
+    };
+
+    // Calculate shift duration properly
+    const calculateShiftDuration = (startTime, endTime) => {
+        if (!startTime || !endTime) return 'N/A';
+
+        const start = moment.utc(startTime);
+        const end = moment.utc(endTime);
+        const duration = moment.duration(end.diff(start));
+
+        const hours = Math.floor(duration.asHours());
+        const minutes = duration.minutes();
+
+        return `${hours}h ${minutes}m`;
+    };
+
+    // Add this useEffect to handle data loading for modals
+    useEffect(() => {
+        if (showModal && modalType === 'plan') {
+            // Ensure essential data is loaded for the form
+            if (qrCodes.length === 0 && !essentialDataLoading.qrCodes) {
+                fetchQRCodes();
+            }
+            if (guards.length === 0 && !essentialDataLoading.guards) {
+                fetchGuards();
+            }
+            if (shifts.length === 0 && !essentialDataLoading.shifts) {
+                fetchShifts();
+            }
+        }
+    }, [showModal, modalType, qrCodes.length, guards.length, shifts.length]);
+    // Validate shift times
+    const validateShiftTimes = (startTime, endTime) => {
+        const start = moment(startTime);
+        const end = moment(endTime);
+
+        if (end.isBefore(start)) {
+            return 'End time cannot be before start time';
+        }
+
+        if (end.diff(start, 'minutes') < 30) {
+            return 'Shift must be at least 30 minutes long';
+        }
+
+        return null;
+    };
+
+    // Helper function to determine performance rating
+    const getPerformanceRating = (score) => {
+        const numericScore = parseFloat(score) || 0;
+        if (numericScore >= 90) return 'Excellent';
+        if (numericScore >= 80) return 'Good';
+        if (numericScore >= 70) return 'Satisfactory';
+        if (numericScore >= 60) return 'Needs Improvement';
+        return 'Poor';
+    };
   // New state for patrol logs
     const [patrolLogs, setPatrolLogs] = useState([]);
     const [logsLoading, setLogsLoading] = useState(false);
@@ -287,10 +512,13 @@ const [guardReports, setGuardReports] = useState([]);
 
     const fetchGuards = async () => {
         try {
+            setEssentialDataLoading(prev => ({ ...prev, guards: true }));
             const response = await axios.get('/api/guards');
             setGuards(response.data.data.guards || []);
         } catch (error) {
             toast.error('Failed to fetch guards');
+        } finally {
+            setEssentialDataLoading(prev => ({ ...prev, guards: false }));
         }
     };
 
@@ -395,52 +623,82 @@ const [guardReports, setGuardReports] = useState([]);
     }, []);
     const fetchShifts = async () => {
         try {
+            setEssentialDataLoading(prev => ({ ...prev, shifts: true }));
             const response = await axios.get('/api/shift');
             setShifts(response.data.data || []);
         } catch (error) {
             toast.error('Failed to fetch shifts');
+        } finally {
+            setEssentialDataLoading(prev => ({ ...prev, shifts: false }));
         }
     };
 
     const fetchQRCodes = async () => {
         try {
+
+            setEssentialDataLoading(prev => ({ ...prev, qrCodes: true }));
             const response = await axios.get('/api/qr');
             setQrCodes(response.data.data.qrs || []);
         } catch (error) {
             toast.error('Failed to fetch QR codes');
+        } finally {
+            setEssentialDataLoading(prev => ({ ...prev, qrCodes: false }));
         }
     };
 
-    // Shift Management - Updated for new model
+    // Create shift with proper timezone handling
     const createShift = async (data) => {
         try {
+            // Validate shift times
+            const timeError = validateShiftTimes(data.startTime, data.endTime);
+            if (timeError) {
+                toast.error(timeError);
+                return;
+            }
+
             const shiftData = {
                 shiftName: data.shiftName,
                 shiftType: data.shiftType,
-                startTime: data.startTime,
-                endTime: data.endTime,
+                startTime: localToUTCDateTime(data.startTime),
+                endTime: localToUTCDateTime(data.endTime),
+                timezone: APP_TIMEZONE,
                 assignedGuards: data.assignedGuards || []
             };
+
             await axios.post('/api/shift', shiftData);
             toast.success('Shift created successfully');
             fetchShifts();
             closeModal();
         } catch (error) {
+            console.error('Shift creation error:', error);
             toast.error(error.response?.data?.msg || 'Failed to create shift');
         }
     };
 
     const updateShift = async (shiftId, data) => {
         try {
-            await axios.put(`/api/shift/${shiftId}`, data);
+            // Validate shift times
+            const timeError = validateShiftTimes(data.startTime, data.endTime);
+            if (timeError) {
+                toast.error(timeError);
+                return;
+            }
+
+            const shiftData = {
+                ...data,
+                startTime: localToUTCDateTime(data.startTime),
+                endTime: localToUTCDateTime(data.endTime),
+            };
+
+            await axios.put(`/api/shift/${shiftId}`, shiftData);
             toast.success('Shift updated successfully');
             fetchShifts();
             closeModal();
         } catch (error) {
+            console.error('Shift update error:', error);
             toast.error(error.response?.data?.msg || 'Failed to update shift');
         }
     };
-
     // Patrol Plan Management - Updated for new structure
     const createPatrolPlan = async (data) => {
         try {
@@ -582,10 +840,17 @@ const [guardReports, setGuardReports] = useState([]);
 
     const createGuard = async (data) => {
         try {
-            await axios.post('/api/auth/register', {
+            // Create a new object excluding email
+            const payload = {
                 ...data,
                 role: 'guard'
-            });
+            };
+
+            // Delete email if it exists
+            delete payload.email;
+
+            await axios.post('/api/auth/register', payload);
+
             toast.success('Guard created successfully');
             fetchGuards();
             closeModal();
@@ -593,6 +858,7 @@ const [guardReports, setGuardReports] = useState([]);
             toast.error(error.response?.data?.msg || 'Failed to create guard');
         }
     };
+
 
     const updateGuard = async (guardId, data) => {
         try {
@@ -626,63 +892,167 @@ const [guardReports, setGuardReports] = useState([]);
         }
     };
 
+    // const openModal = (type, item = null) => {
+    //     setModalType(type);
+    //     setEditingItem(item);
+    //     setShowModal(true);
+
+    //     if (item) {
+    //         // Transform data for form based on new structure
+    //         const formData = { ...item };
+
+    //         if (type === 'plan') {
+    //             // Transform patrol plan data
+    //             if (item.checkpoints) {
+    //                 formData.checkpoints = item.checkpoints.map(cp => ({
+    //                     qrId: cp.qrId?._id || cp.qrId,
+    //                     siteId: cp.siteId,
+    //                     expectedTime: cp.expectedTime
+    //                 }));
+    //             }
+
+    //             if (item.assignedGuards) {
+    //                 formData.assignedGuards = item.assignedGuards.map(ag => ({
+    //                     guardId: ag.guardId?._id || ag.guardId,
+    //                     assignedShifts: ag.assignedShifts?.map(s => s._id || s) || []
+    //                 }));
+    //             }
+
+    //             // Format dates for datetime-local inputs
+    //             if (item.startDate) {
+    //                 formData.startDate = new Date(item.startDate).toISOString().slice(0, 16);
+    //             }
+    //             if (item.endDate) {
+    //                 formData.endDate = new Date(item.endDate).toISOString().slice(0, 16);
+    //             }
+    //         }
+
+    //         if (type === 'shift') {
+    //             // Transform shift data for new model
+    //             if (item.assignedGuards) {
+    //                 formData.assignedGuards = item.assignedGuards.map(g => g._id || g);
+    //             }
+    //             if (item.startTime) {
+    //                 formData.startTime = new Date(item.startTime).toISOString().slice(0, 16);
+    //             }
+    //             if (item.endTime) {
+    //                 formData.endTime = new Date(item.endTime).toISOString().slice(0, 16);
+    //             }
+    //         }
+
+    //         reset(formData);
+    //     } else {
+    //         reset({
+    //             checkpoints: [],
+    //             assignedGuards: [],
+    //             startDate: new Date().toISOString().slice(0, 16)
+    //         });
+    //     }
+    // };
+
     const openModal = (type, item = null) => {
         setModalType(type);
         setEditingItem(item);
         setShowModal(true);
 
         if (item) {
-            // Transform data for form based on new structure
-            const formData = { ...item };
+            let formData = { ...item };
 
-            if (type === 'plan') {
-                // Transform patrol plan data
-                if (item.checkpoints) {
-                    formData.checkpoints = item.checkpoints.map(cp => ({
-                        qrId: cp.qrId?._id || cp.qrId,
-                        siteId: cp.siteId,
-                        expectedTime: cp.expectedTime
+            // Handle different modal types
+            switch (type) {
+                case 'guard':
+                    
+                        formData.password = '';
+                    
+                    break;
+
+                case 'plan':
+                    // Ensure checkpoints array exists and has proper structure
+                    formData.checkpoints = (item.checkpoints || []).map(cp => ({
+                        qrId: cp.qrId?._id || cp.qrId || '',
+                        siteId: cp.siteId || '',
+                        expectedTime: cp.expectedTime || 5
                     }));
-                }
 
-                if (item.assignedGuards) {
-                    formData.assignedGuards = item.assignedGuards.map(ag => ({
-                        guardId: ag.guardId?._id || ag.guardId,
+                    // Ensure assignedGuards array exists and has proper structure
+                    formData.assignedGuards = (item.assignedGuards || []).map(ag => ({
+                        guardId: ag.guardId?._id || ag.guardId || '',
                         assignedShifts: ag.assignedShifts?.map(s => s._id || s) || []
                     }));
-                }
 
-                // Format dates for datetime-local inputs
-                if (item.startDate) {
-                    formData.startDate = new Date(item.startDate).toISOString().slice(0, 16);
-                }
-                if (item.endDate) {
-                    formData.endDate = new Date(item.endDate).toISOString().slice(0, 16);
-                }
-            }
+                   
+                    if (item.startDate) {
+                        formData.startDate = moment(item.startDate).format('YYYY-MM-DDTHH:mm');
+                    }
+                    if (item.endDate) {
+                        formData.endDate = moment(item.endDate).format('YYYY-MM-DDTHH:mm');
+                    }
 
-            if (type === 'shift') {
-                // Transform shift data for new model
-                if (item.assignedGuards) {
-                    formData.assignedGuards = item.assignedGuards.map(g => g._id || g);
-                }
-                if (item.startTime) {
-                    formData.startTime = new Date(item.startTime).toISOString().slice(0, 16);
-                }
-                if (item.endTime) {
-                    formData.endTime = new Date(item.endTime).toISOString().slice(0, 16);
-                }
+                    
+                    formData.rounds = item.rounds || 1;
+                    
+                    break;
+
+                case 'shift':
+                    if (item.startTime) {
+                        formData.startTime = utcToLocalDateTime(item.startTime);
+                    }
+                    if (item.endTime) {
+                        formData.endTime = utcToLocalDateTime(item.endTime);
+                    }
+                    if (item.assignedGuards) {
+                        formData.assignedGuards = item.assignedGuards.map(g => g._id || g);
+                    }
+
+                    break;
+
+                case 'qr':
+                    // ... existing QR transformation logic
+                    break;
             }
 
             reset(formData);
         } else {
-            reset({
-                checkpoints: [],
-                assignedGuards: [],
-                startDate: new Date().toISOString().slice(0, 16)
-            });
+            // Default empty form for new items
+            const defaultForms = {
+                guard: {
+                    name: '',
+                    email: '',
+                    phone: '',
+                    password: '',
+                    isActive: true
+                },
+                plan: {
+                    planName: '',
+                    description: '',
+                    frequency: '',
+                    rounds: 1,
+                    startDate: moment().format('YYYY-MM-DDTHH:mm'),
+                    endDate: '',
+                    checkpoints: [],
+                    assignedGuards: []
+                },
+                shift: {
+                    shiftName: '',
+                    shiftType: '',
+                    startTime: moment().add(1, 'day').startOf('hour').format('YYYY-MM-DDTHH:mm'),
+                    endTime: moment().add(1, 'day').startOf('hour').add(8, 'hours').format('YYYY-MM-DDTHH:mm'),
+                   
+                    assignedGuards: []
+                },
+                qr: {
+                    siteId: '',
+                    description: '',
+                    lat: '',
+                    lng: '',
+                    radius: 50
+                }
+            };
+
+            reset(defaultForms[type] || {});
         }
     };
+
 
     const closeModal = () => {
         setShowModal(false);
@@ -694,6 +1064,14 @@ const [guardReports, setGuardReports] = useState([]);
     };
 
     const handleFormSubmit = (data) => {
+        const processedData = { ...data };
+
+        // if (modalType === 'shift') {
+        //     processedData.startTime = data.startTime + ':00.000Z';
+        //     processedData.endTime = data.endTime + ':00.000Z';
+        // }
+
+
         switch (modalType) {
             case 'guard':
                 if (editingItem) {
@@ -789,17 +1167,17 @@ const [guardReports, setGuardReports] = useState([]);
 
     const tabs = [
         { id: 'dashboard', label: 'Dashboard', icon: BarChart3 },
-        { id: 'guards', label: 'Guards', icon: Shield },
+        { id: 'guards', label: 'Guard Master', icon: Shield },
         { id: 'shifts', label: 'Shifts', icon: Clock },
         { id: 'qr-codes', label: 'QR Codes', icon: QrCode },
         { id: 'plans', label: 'Patrol Plans', icon: Target },
         { id: 'incidents', label: 'Incidents', icon: AlertTriangle },
          { id: 'guard-reports', label: 'Guard Reports', icon: FileText },
-           { id: 'patrol-logs', label: 'Patrol Logs', icon: MapPin } // New tab
+        { id: 'patrol-logs', label: 'Patrol Logs', icon: MapPin } // New tab
     ];
 
     if (loading && !dashboardData) {
-        return <div className="flex justify-center items-center h-screen">Loading...</div>;
+        return   <div className="flex justify-center items-center h-screen">Loading...</div>;
     }
 
     return (
@@ -1027,8 +1405,8 @@ const [guardReports, setGuardReports] = useState([]);
             </button>
         </div>
     </div>
+
 )}
-                    {/* Shifts Tab - Updated for new model */}
                     {activeTab === 'shifts' && (
                         <div>
                             <div className="flex justify-between items-center mb-6">
@@ -1055,44 +1433,60 @@ const [guardReports, setGuardReports] = useState([]);
                                     </div>
                                 ) : (
                                     <ul className="divide-y divide-gray-200">
-                                        {shifts.map((shift) => (
-                                            <li key={shift._id}>
-                                                <div className="px-4 py-4 flex items-center justify-between hover:bg-gray-50">
-                                                    <div className="flex items-center">
-                                                        <div className="flex-shrink-0">
-                                                            <Clock className="h-8 w-8 text-green-600" />
+                                        {shifts.map((shift) => {
+                                            const isActive = moment().isBetween(
+                                                moment.utc(shift.startTime),
+                                                moment.utc(shift.endTime)
+                                            );
+
+                                            return (
+                                                <li key={shift._id}>
+                                                    <div className="px-4 py-4 flex items-center justify-between hover:bg-gray-50">
+                                                        <div className="flex items-center">
+                                                            <div className="flex-shrink-0">
+                                                                <Clock className={`h-8 w-8 ${isActive ? 'text-green-600' : 'text-gray-400'}`} />
+                                                            </div>
+                                                            <div className="ml-4">
+                                                                <div className="flex items-center space-x-2">
+                                                                    <div className="text-sm font-medium text-gray-900">
+                                                                        {shift.shiftName || 'Unnamed Shift'}
+                                                                    </div>
+                                                                    {isActive && (
+                                                                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                                                            Active Now
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                                <div className="text-sm text-gray-500">
+                                                                    {formatDateTimeForDisplay(shift.startTime)} - {formatDateTimeForDisplay(shift.endTime)}
+                                                                </div>
+                                                                <div className="text-xs text-gray-400 capitalize">
+                                                                    Type: {shift.shiftType} •
+                                                                    Duration: {calculateShiftDuration(shift.startTime, shift.endTime)} •
+                                                                    Guards: {shift.assignedGuards?.length || 0}
+                                                                </div>
+                                                            </div>
                                                         </div>
-                                                        <div className="ml-4">
-                                                            <div className="text-sm font-medium text-gray-900">
-                                                                {shift.shiftName || 'Unnamed Shift'}
-                                                            </div>
-                                                            <div className="text-sm text-gray-500">
-                                                                {new Date(shift.startTime).toLocaleString()} - {new Date(shift.endTime).toLocaleString()}
-                                                            </div>
-                                                            <div className="text-xs text-gray-400 capitalize">
-                                                                Type: {shift.shiftType} • Guards: {shift.assignedGuards?.length || 0}
-                                                            </div>
+                                                        <div className="flex items-center space-x-2">
+                                                            <button
+                                                                onClick={() => openModal('shift', shift)}
+                                                                className="inline-flex items-center p-1.5 border border-transparent rounded-full text-indigo-600 hover:bg-indigo-100"
+                                                                title="Edit Shift"
+                                                            >
+                                                                <Edit className="h-4 w-4" />
+                                                            </button>
+                                                            <button
+                                                                onClick={() => deleteShift(shift._id)}
+                                                                className="inline-flex items-center p-1.5 border border-transparent rounded-full text-red-600 hover:bg-red-100"
+                                                                title="Delete Shift"
+                                                            >
+                                                                <Trash2 className="h-4 w-4" />
+                                                            </button>
                                                         </div>
                                                     </div>
-                                                    <div className="flex items-center space-x-2">
-                                                        <button
-                                                            onClick={() => openModal('shift', shift)}
-                                                            className="inline-flex items-center p-1.5 border border-transparent rounded-full text-indigo-600 hover:bg-indigo-100"
-                                                            title="Edit Shift"
-                                                        >
-                                                            <Edit className="h-4 w-4" />
-                                                        </button>
-                                                        <button
-                                                            onClick={() => deleteShift(shift._id)}
-                                                            className="inline-flex items-center p-1.5 border border-transparent rounded-full text-red-600 hover:bg-red-100"
-                                                            title="Delete Shift"
-                                                        >
-                                                            <Trash2 className="h-4 w-4" />
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            </li>
-                                        ))}
+                                                </li>
+                                            );
+                                        })}
                                     </ul>
                                 )}
                             </div>
@@ -1230,263 +1624,349 @@ const [guardReports, setGuardReports] = useState([]);
                     )}
 
        {/* Patrol Logs Tab */}
-    {activeTab === 'patrol-logs' && (
-        <div>
-            <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-bold text-gray-900">Patrol Logs</h2>
-                <div className="flex items-center space-x-2">
-                    <button
-                        onClick={clearLogsFilters}
-                        className="flex items-center px-3 py-2 text-sm text-gray-600 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
-                    >
-                        <Filter className="w-4 h-4 mr-1" />
-                        Clear Filters
-                    </button>
-                </div>
-            </div>
+                    {/* Patrol Logs Tab - Tabular Form */}
+                    {activeTab === 'patrol-logs' && (
+                        <div>
+                            <div className="flex justify-between items-center mb-6">
+                                <h2 className="text-2xl font-bold text-gray-900">Patrol Logs</h2>
+                                <div className="flex items-center space-x-2">
+                                    <button
+                                        onClick={clearLogsFilters}
+                                        className="flex items-center px-3 py-2 text-sm text-gray-600 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+                                    >
+                                        <Filter className="w-4 h-4 mr-1" />
+                                        Clear Filters
+                                    </button>
+                                </div>
+                            </div>
 
-            {/* Filters */}
-            <div className="bg-white p-4 rounded-lg shadow mb-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Guard</label>
-                        <select
-                            value={logsFilters.guardId}
-                            onChange={(e) => handleLogsFilterChange('guardId', e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                        >
-                            <option value="">All Guards</option>
-                            {guards.filter(guard => guard.isActive).map(guard => (
-                                <option key={guard._id} value={guard._id}>
-                                    {guard.name}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Patrol Plan</label>
-                        <select
-                            value={logsFilters.patrolPlanId}
-                            onChange={(e) => handleLogsFilterChange('patrolPlanId', e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                        >
-                            <option value="">All Plans</option>
-                            {patrolPlans.map(plan => (
-                                <option key={plan._id} value={plan._id}>
-                                    {plan.planName}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Shift</label>
-                        <select
-                            value={logsFilters.shiftId}
-                            onChange={(e) => handleLogsFilterChange('shiftId', e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                        >
-                            <option value="">All Shifts</option>
-                            {shifts.map(shift => (
-                                <option key={shift._id} value={shift._id}>
-                                    {shift.shiftName || shift.shiftType}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
-                        <input
-                            type="date"
-                            value={logsFilters.startDate}
-                            onChange={(e) => handleLogsFilterChange('startDate', e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">End Date</label>
-                        <input
-                            type="date"
-                            value={logsFilters.endDate}
-                            onChange={(e) => handleLogsFilterChange('endDate', e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Sort</label>
-                        <select
-                            value={logsFilters.sort}
-                            onChange={(e) => handleLogsFilterChange('sort', e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                        >
-                            <option value="desc">Newest First</option>
-                            <option value="asc">Oldest First</option>
-                        </select>
-                    </div>
-                </div>
-            </div>
-
-            {/* Logs List */}
-            <div className="bg-white shadow overflow-hidden sm:rounded-md">
-                {logsLoading ? (
-                    <div className="flex justify-center items-center py-8">
-                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
-                    </div>
-                ) : patrolLogs.length === 0 ? (
-                    <div className="text-center py-12">
-                        <MapPin className="mx-auto h-16 w-16 text-gray-400" />
-                        <h3 className="mt-4 text-lg font-medium text-gray-900">No patrol logs found</h3>
-                        <p className="mt-2 text-sm text-gray-500">
-                            {Object.values(logsFilters).some(val => val && val !== '' && val !== 1 && val !== 20 && val !== 'desc') 
-                                ? 'Try adjusting your filters' 
-                                : 'No patrol scans recorded yet'
-                            }
-                        </p>
-                    </div>
-                ) : (
-                    <>
-                        <ul className="divide-y divide-gray-200">
-                            {patrolLogs.map((log) => (
-                                <li key={log._id} className="px-6 py-4 hover:bg-gray-50">
-                                    <div className="flex items-center justify-between">
-                                        <div className="flex items-center space-x-4">
-                                            {/* QR Code/Location Info */}
-                                            <div className="flex-shrink-0">
-                                                <MapPin className="h-8 w-8 text-green-600" />
-                                            </div>
-                                            
-                                            <div className="flex-1 min-w-0">
-                                                <div className="flex items-center space-x-2 mb-1">
-                                                    <p className="text-sm font-medium text-gray-900 truncate">
-                                                        {log.qrCode?.siteId || 'Unknown Location'}
-                                                    </p>
-                                                    {log.isVerified && (
-                                                        <CheckCircle className="h-4 w-4 text-green-500" title="Verified Scan" />
-                                                    )}
-                                                </div>
-                                                
-                                                <div className="text-sm text-gray-500 space-y-1">
-                                                    <div className="flex flex-wrap gap-x-4 gap-y-1">
-                                                        <span>
-                                                            <strong>Guard:</strong> {log.guard?.name || 'Unknown'}
-                                                        </span>
-                                                        <span>
-                                                            <strong>Plan:</strong> {log.patrolPlan?.planName || 'N/A'}
-                                                        </span>
-                                                        <span>
-                                                            <strong>Shift:</strong> {log.shift?.shiftName || log.shift?.shiftType || 'N/A'}
-                                                        </span>
-                                                    </div>
-                                                    
-                                                    {log.qrCode?.description && (
-                                                        <p className="text-xs">{log.qrCode.description}</p>
-                                                    )}
-                                                    
-                                                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
-                                                        {log.location && (
-                                                            <span>
-                                                                <strong>Location:</strong> {log.location.lat?.toFixed(6)}, {log.location.lng?.toFixed(6)}
-                                                            </span>
-                                                        )}
-                                                        {log.distanceMeters !== undefined && (
-                                                            <span>
-                                                                <strong>Distance:</strong> {log.distanceMeters.toFixed(2)}m
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        
-                                        <div className="flex flex-col items-end space-y-2">
-                                            <div className="text-sm text-gray-500 text-right">
-                                                {new Date(log.scanTime).toLocaleDateString()}
-                                                <br />
-                                                {new Date(log.scanTime).toLocaleTimeString()}
-                                            </div>
-                                            
-                                            {log.photo && (
-                                                <button
-                                                    onClick={() => setMediaModal({ type: 'image', src: log.photo })}
-                                                    className="flex items-center text-xs text-indigo-600 hover:text-indigo-800"
-                                                >
-                                                    <Eye className="h-3 w-3 mr-1" />
-                                                    View Photo
-                                                </button>
-                                            )}
-                                        </div>
-                                    </div>
-                                </li>
-                            ))}
-                        </ul>
-
-                        {/* Pagination */}
-                        {logsPagination.pages > 1 && (
-                            <div className="bg-white px-6 py-3 flex items-center justify-between border-t border-gray-200">
-                                <div className="flex justify-between items-center w-full">
-                                    <div className="text-sm text-gray-700">
-                                        Showing <span className="font-medium">{(logsPagination.page - 1) * logsPagination.limit + 1}</span> to{' '}
-                                        <span className="font-medium">
-                                            {Math.min(logsPagination.page * logsPagination.limit, logsPagination.total)}
-                                        </span> of{' '}
-                                        <span className="font-medium">{logsPagination.total}</span> results
-                                    </div>
-                                    
-                                    <div className="flex space-x-2">
-                                        <button
-                                            onClick={() => handlePageChange(logsPagination.page - 1)}
-                                            disabled={logsPagination.page === 1}
-                                            className="relative inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-500 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                            {/* Filters */}
+                            <div className="bg-white p-4 rounded-lg shadow mb-6">
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Guard</label>
+                                        <select
+                                            value={logsFilters.guardId}
+                                            onChange={(e) => handleLogsFilterChange('guardId', e.target.value)}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
                                         >
-                                            <ChevronLeft className="h-4 w-4" />
-                                            Previous
-                                        </button>
-                                        
-                                        <div className="flex items-center space-x-1">
-                                            {Array.from({ length: Math.min(5, logsPagination.pages) }, (_, i) => {
-                                                let pageNum;
-                                                if (logsPagination.pages <= 5) {
-                                                    pageNum = i + 1;
-                                                } else if (logsPagination.page <= 3) {
-                                                    pageNum = i + 1;
-                                                } else if (logsPagination.page >= logsPagination.pages - 2) {
-                                                    pageNum = logsPagination.pages - 4 + i;
-                                                } else {
-                                                    pageNum = logsPagination.page - 2 + i;
-                                                }
-                                                
-                                                return (
-                                                    <button
-                                                        key={pageNum}
-                                                        onClick={() => handlePageChange(pageNum)}
-                                                        className={`relative inline-flex items-center px-3 py-2 border text-sm font-medium ${
-                                                            logsPagination.page === pageNum
-                                                                ? 'border-indigo-500 bg-indigo-50 text-indigo-600'
-                                                                : 'border-gray-300 bg-white text-gray-500 hover:bg-gray-50'
-                                                        }`}
-                                                    >
-                                                        {pageNum}
-                                                    </button>
-                                                );
-                                            })}
-                                        </div>
-                                        
-                                        <button
-                                            onClick={() => handlePageChange(logsPagination.page + 1)}
-                                            disabled={logsPagination.page >= logsPagination.pages}
-                                            className="relative inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-500 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                            <option value="">All Guards</option>
+                                            {guards.filter(guard => guard.isActive).map(guard => (
+                                                <option key={guard._id} value={guard._id}>
+                                                    {guard.name}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Patrol Plan</label>
+                                        <select
+                                            value={logsFilters.patrolPlanId}
+                                            onChange={(e) => handleLogsFilterChange('patrolPlanId', e.target.value)}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
                                         >
-                                            Next
-                                            <ChevronRight className="h-4 w-4" />
-                                        </button>
+                                            <option value="">All Plans</option>
+                                            {patrolPlans.map(plan => (
+                                                <option key={plan._id} value={plan._id}>
+                                                    {plan.planName}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Shift</label>
+                                        <select
+                                            value={logsFilters.shiftId}
+                                            onChange={(e) => handleLogsFilterChange('shiftId', e.target.value)}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                                        >
+                                            <option value="">All Shifts</option>
+                                            {shifts.map(shift => (
+                                                <option key={shift._id} value={shift._id}>
+                                                    {shift.shiftName || shift.shiftType}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
+                                        <input
+                                            type="date"
+                                            value={logsFilters.startDate}
+                                            onChange={(e) => handleLogsFilterChange('startDate', e.target.value)}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">End Date</label>
+                                        <input
+                                            type="date"
+                                            value={logsFilters.endDate}
+                                            onChange={(e) => handleLogsFilterChange('endDate', e.target.value)}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Sort</label>
+                                        <select
+                                            value={logsFilters.sort}
+                                            onChange={(e) => handleLogsFilterChange('sort', e.target.value)}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                                        >
+                                            <option value="desc">Newest First</option>
+                                            <option value="asc">Oldest First</option>
+                                        </select>
                                     </div>
                                 </div>
                             </div>
-                        )}
-                    </>
-                )}
-            </div>
-        </div>
-    )}
+
+                            {/* Logs Table */}
+                            <div className="bg-white shadow overflow-hidden sm:rounded-md">
+                                {logsLoading ? (
+                                    <div className="flex justify-center items-center py-8">
+                                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+                                    </div>
+                                ) : patrolLogs.length === 0 ? (
+                                    <div className="text-center py-12">
+                                        <MapPin className="mx-auto h-16 w-16 text-gray-400" />
+                                        <h3 className="mt-4 text-lg font-medium text-gray-900">No patrol logs found</h3>
+                                        <p className="mt-2 text-sm text-gray-500">
+                                            {Object.values(logsFilters).some(val => val && val !== '' && val !== 1 && val !== 20 && val !== 'desc')
+                                                ? 'Try adjusting your filters'
+                                                : 'No patrol scans recorded yet'
+                                            }
+                                        </p>
+                                    </div>
+                                ) : (
+                                    <>
+                                        <div className="overflow-x-auto">
+                                            <table className="min-w-full divide-y divide-gray-200">
+                                                <thead className="bg-gray-50">
+                                                    <tr>
+                                                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                            Guard
+                                                        </th>
+                                                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                            Location
+                                                        </th>
+                                                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                            Patrol Plan
+                                                        </th>
+                                                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                            Shift
+                                                        </th>
+                                                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                            Scan Time
+                                                        </th>
+                                                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                            Distance
+                                                        </th>
+                                                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                            Status
+                                                        </th>
+                                                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                            Actions
+                                                        </th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="bg-white divide-y divide-gray-200">
+                                                    {patrolLogs.map((log) => (
+                                                        <tr key={log._id} className="hover:bg-gray-50">
+                                                            {/* Guard Column */}
+                                                            <td className="px-6 py-4 whitespace-nowrap">
+                                                                <div className="flex items-center">
+                                                                    <Shield className="h-5 w-5 text-gray-400 mr-3" />
+                                                                    <div>
+                                                                        <div className="text-sm font-medium text-gray-900">
+                                                                            {log.guard?.name || 'Unknown Guard'}
+                                                                        </div>
+                                                                        <div className="text-xs text-gray-500">
+                                                                            ID: {log.guard?._id?.substring(0, 8) || 'N/A'}
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            </td>
+
+                                                            {/* Location Column */}
+                                                            <td className="px-6 py-4 whitespace-nowrap">
+                                                                <div>
+                                                                    <div className="text-sm font-medium text-gray-900">
+                                                                        {log.qrCode?.siteId || 'Unknown Location'}
+                                                                    </div>
+                                                                    {log.qrCode?.description && (
+                                                                        <div className="text-xs text-gray-500 truncate max-w-xs">
+                                                                            {log.qrCode.description}
+                                                                        </div>
+                                                                    )}
+                                                                    {log.location && (
+                                                                        <div className="text-xs text-gray-400">
+                                                                            {log.location.lat?.toFixed(4)}, {log.location.lng?.toFixed(4)}
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            </td>
+
+                                                            {/* Patrol Plan Column */}
+                                                            <td className="px-6 py-4 whitespace-nowrap">
+                                                                <div className="text-sm text-gray-900">
+                                                                    {log.patrolPlan?.planName || 'N/A'}
+                                                                </div>
+                                                                <div className="text-xs text-gray-500">
+                                                                    Plan ID: {log.patrolPlan?._id?.substring(0, 8) || 'N/A'}
+                                                                </div>
+                                                            </td>
+
+                                                            {/* Shift Column */}
+                                                            <td className="px-6 py-4 whitespace-nowrap">
+                                                                <div className="text-sm text-gray-900">
+                                                                    {log.shift?.shiftName || log.shift?.shiftType || 'N/A'}
+                                                                </div>
+                                                                <div className="text-xs text-gray-500">
+                                                                    {log.shift?.startTime && new Date(log.shift.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                                </div>
+                                                            </td>
+
+                                                            {/* Scan Time Column */}
+                                                            <td className="px-6 py-4 whitespace-nowrap">
+                                                                <div className="text-sm text-gray-900">
+                                                                    {new Date(log.scanTime).toLocaleDateString()}
+                                                                </div>
+                                                                <div className="text-xs text-gray-500">
+                                                                    {new Date(log.scanTime).toLocaleTimeString()}
+                                                                </div>
+                                                            </td>
+
+                                                            {/* Distance Column */}
+                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                                {log.distanceMeters !== undefined ? (
+                                                                    <div>
+                                                                        <span className={`font-medium ${log.distanceMeters <= 10 ? 'text-green-600' :
+                                                                                log.distanceMeters <= 25 ? 'text-yellow-600' :
+                                                                                    'text-red-600'
+                                                                            }`}>
+                                                                            {log.distanceMeters.toFixed(2)}m
+                                                                        </span>
+                                                                    </div>
+                                                                ) : (
+                                                                    'N/A'
+                                                                )}
+                                                            </td>
+
+                                                            {/* Status Column */}
+                                                            <td className="px-6 py-4 whitespace-nowrap">
+                                                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${log.isVerified
+                                                                        ? 'bg-green-100 text-green-800'
+                                                                        : 'bg-yellow-100 text-yellow-800'
+                                                                    }`}>
+                                                                    {log.isVerified ? (
+                                                                        <>
+                                                                            <CheckCircle className="w-3 h-3 mr-1" />
+                                                                            Verified
+                                                                        </>
+                                                                    ) : (
+                                                                        'Unverified'
+                                                                    )}
+                                                                </span>
+                                                            </td>
+
+                                                            {/* Actions Column */}
+                                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                                                <div className="flex space-x-2">
+                                                                    {log.photo && (
+                                                                        <button
+                                                                            onClick={() => setMediaModal({ type: 'image', src: log.photo })}
+                                                                            className="text-indigo-600 hover:text-indigo-900 flex items-center"
+                                                                            title="View Photo"
+                                                                        >
+                                                                            <Eye className="h-4 w-4 mr-1" />
+                                                                            Photo
+                                                                        </button>
+                                                                    )}
+                                                                    {log.video && (
+                                                                        <button
+                                                                            onClick={() => setMediaModal({ type: 'video', src: log.video })}
+                                                                            className="text-purple-600 hover:text-purple-900 flex items-center"
+                                                                            title="View Video"
+                                                                        >
+                                                                            <Play className="h-4 w-4 mr-1" />
+                                                                            Video
+                                                                        </button>
+                                                                    )}
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+
+                                        {/* Pagination */}
+                                        {logsPagination.pages > 1 && (
+                                            <div className="bg-white px-6 py-3 flex items-center justify-between border-t border-gray-200">
+                                                <div className="flex justify-between items-center w-full">
+                                                    <div className="text-sm text-gray-700">
+                                                        Showing <span className="font-medium">{(logsPagination.page - 1) * logsPagination.limit + 1}</span> to{' '}
+                                                        <span className="font-medium">
+                                                            {Math.min(logsPagination.page * logsPagination.limit, logsPagination.total)}
+                                                        </span> of{' '}
+                                                        <span className="font-medium">{logsPagination.total}</span> results
+                                                    </div>
+
+                                                    <div className="flex space-x-2">
+                                                        <button
+                                                            onClick={() => handlePageChange(logsPagination.page - 1)}
+                                                            disabled={logsPagination.page === 1}
+                                                            className="relative inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-500 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                        >
+                                                            <ChevronLeft className="h-4 w-4" />
+                                                            Previous
+                                                        </button>
+
+                                                        <div className="flex items-center space-x-1">
+                                                            {Array.from({ length: Math.min(5, logsPagination.pages) }, (_, i) => {
+                                                                let pageNum;
+                                                                if (logsPagination.pages <= 5) {
+                                                                    pageNum = i + 1;
+                                                                } else if (logsPagination.page <= 3) {
+                                                                    pageNum = i + 1;
+                                                                } else if (logsPagination.page >= logsPagination.pages - 2) {
+                                                                    pageNum = logsPagination.pages - 4 + i;
+                                                                } else {
+                                                                    pageNum = logsPagination.page - 2 + i;
+                                                                }
+
+                                                                return (
+                                                                    <button
+                                                                        key={pageNum}
+                                                                        onClick={() => handlePageChange(pageNum)}
+                                                                        className={`relative inline-flex items-center px-3 py-2 border text-sm font-medium ${logsPagination.page === pageNum
+                                                                                ? 'border-indigo-500 bg-indigo-50 text-indigo-600'
+                                                                                : 'border-gray-300 bg-white text-gray-500 hover:bg-gray-50'
+                                                                            }`}
+                                                                    >
+                                                                        {pageNum}
+                                                                    </button>
+                                                                );
+                                                            })}
+                                                        </div>
+
+                                                        <button
+                                                            onClick={() => handlePageChange(logsPagination.page + 1)}
+                                                            disabled={logsPagination.page >= logsPagination.pages}
+                                                            className="relative inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-500 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                        >
+                                                            Next
+                                                            <ChevronRight className="h-4 w-4" />
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </>
+                                )}
+                            </div>
+                        </div>
+                    )}
 
     {/* Media Modal */}
     {mediaModal.src && (
@@ -1600,541 +2080,298 @@ const [guardReports, setGuardReports] = useState([]);
                     )}
     {/* Guard Reports Tab */}
 {/* Guard Reports Tab */}
-{activeTab === 'guard-reports' && (
-    <div>
-        <div className="flex justify-between items-center mb-6">
-            <h2 className="text-2xl font-bold text-gray-900">Guard Performance Reports</h2>
-        </div>
-
-        {/* Report Generator */}
-        <div className="bg-white p-6 rounded-lg shadow mb-6">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Generate Performance Report</h3>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
-                <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Select Guard</label>
-                    <select
-                        value={selectedGuard}
-                        onChange={(e) => setSelectedGuard(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                    >
-                        <option value="">Choose a guard</option>
-                        {guards.filter(guard => guard.isActive).map(guard => (
-                            <option key={guard._id} value={guard._id}>
-                                {guard.name}
-                            </option>
-                        ))}
-                    </select>
-                </div>
-                <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
-                    <input
-                        type="date"
-                        value={reportFilters.startDate}
-                        onChange={(e) => setReportFilters(prev => ({ ...prev, startDate: e.target.value }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                    />
-                </div>
-                <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">End Date</label>
-                    <input
-                        type="date"
-                        value={reportFilters.endDate}
-                        onChange={(e) => setReportFilters(prev => ({ ...prev, endDate: e.target.value }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                    />
-                </div>
-                <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Shift (Optional)</label>
-                    <select
-                        value={reportFilters.shiftId}
-                        onChange={(e) => setReportFilters(prev => ({ ...prev, shiftId: e.target.value }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                    >
-                        <option value="">All Shifts</option>
-                        {shifts.map(shift => (
-                            <option key={shift._id} value={shift._id}>
-                                {shift.shiftName || shift.shiftType}
-                            </option>
-                        ))}
-                    </select>
-                </div>
-            </div>
-            <button
-                onClick={handleGenerateReport}
-                disabled={!selectedGuard || generatingReport}
-                className="flex items-center px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-                {generatingReport ? (
-                    <>
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                        Generating...
-                    </>
-                ) : (
-                    <>
-                        <FileText className="w-4 h-4 mr-2" />
-                        Generate Report
-                    </>
-                )}
-            </button>
-        </div>
-
-        {/* Reports List */}
-        <div className="space-y-6">
-            {guardReports.length === 0 ? (
-                <div className="text-center py-12 bg-white rounded-lg shadow">
-                    <FileText className="mx-auto h-16 w-16 text-gray-400" />
-                    <h3 className="mt-4 text-lg font-medium text-gray-900">No reports generated</h3>
-                    <p className="mt-2 text-sm text-gray-500">
-                        Generate a performance report to see guard analytics and metrics.
-                    </p>
-                </div>
-            ) : (
-                guardReports.map((report, index) => (
-                    <div key={index} className="bg-white rounded-lg shadow overflow-hidden">
-                        {/* Report Header */}
-                        <div className="bg-gray-50 px-6 py-4 border-b">
-                            <div className="flex justify-between items-center">
-                                <div>
-                                    <h3 className="text-lg font-medium text-gray-900">
-                                        {report.guard.name} - Performance Report
-                                    </h3>
-                                    <p className="text-sm text-gray-500">
-                                        Period: {new Date(report.reportPeriod.startDate).toLocaleDateString()} - {new Date(report.reportPeriod.endDate).toLocaleDateString()}
-                                        {report.reportPeriod.daysInPeriod && (
-                                            <span className="ml-2">({report.reportPeriod.daysInPeriod} days)</span>
-                                        )}
-                                    </p>
-                                    <p className="text-sm text-gray-500">
-                                        Current Status: <span className="font-medium capitalize">{report.guard.currentStatus || 'Unknown'}</span>
-                                        {report.guard.currentShift && (
-                                            <span className="ml-2">
-                                                • Current Shift: {report.guard.currentShift.shiftName}
-                                            </span>
-                                        )}
-                                    </p>
-                                </div>
-                                <div className="flex items-center space-x-3">
-                                    <div className="text-right">
-                                        <div className={`text-2xl font-bold ${
-                                            parseFloat(report.performanceScore?.overall || report.overallScore) >= 80 ? 'text-green-600' :
-                                            parseFloat(report.performanceScore?.overall || report.overallScore) >= 60 ? 'text-yellow-600' :
-                                            'text-red-600'
-                                        }`}>
-                                            {report.performanceScore?.overall || report.overallScore}%
-                                        </div>
-                                        <div className="text-xs text-gray-500">
-                                            {report.performanceScore?.rating || 'Overall Score'}
-                                        </div>
-                                    </div>
-                                    <button
-                                        onClick={() => downloadReport(report)}
-                                        className="flex items-center px-3 py-2 text-sm text-gray-600 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
-                                    >
-                                        <Download className="w-4 h-4 mr-1" />
-                                        Download
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Performance Score Breakdown */}
-                        {report.performanceScore && (
-                            <div className="px-6 py-4 border-b bg-indigo-50">
-                                <h4 className="text-md font-medium text-gray-900 mb-3">Performance Breakdown</h4>
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                    {Object.entries(report.performanceScore.breakdown || {}).map(([category, score]) => (
-                                        <div key={category} className="text-center">
-                                            <div className={`text-lg font-bold ${
-                                                parseFloat(score) >= 80 ? 'text-green-600' :
-                                                parseFloat(score) >= 60 ? 'text-yellow-600' :
-                                                'text-red-600'
-                                            }`}>
-                                                {score}%
-                                            </div>
-                                            <div className="text-sm text-gray-600 capitalize">
-                                                {category.replace(/([A-Z])/g, ' $1').trim()}
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Report Content */}
-                        <div className="p-6 space-y-6">
-                            {/* Attendance Section */}
-                            <div>
-                                <h4 className="text-md font-medium text-gray-900 mb-4">Attendance Summary</h4>
-                                
-                                {/* Summary Cards */}
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                                    <div className="bg-blue-50 p-4 rounded-lg">
-                                        <div className="text-2xl font-bold text-blue-600">
-                                            {report.attendance?.summary?.daysPresent || report.attendance?.daysPresent || 0}
-                                        </div>
-                                        <div className="text-sm text-blue-600">Days Present</div>
-                                        <div className="text-xs text-gray-500">
-                                            of {report.attendance?.summary?.totalDays || report.attendance?.totalDays || 0} total
-                                        </div>
-                                    </div>
-                                    <div className="bg-green-50 p-4 rounded-lg">
-                                        <div className="text-2xl font-bold text-green-600">
-                                            {report.attendance?.summary?.attendanceRate || report.attendance?.attendanceRate || '0%'}
-                                        </div>
-                                        <div className="text-sm text-green-600">Attendance Rate</div>
-                                    </div>
-                                    <div className="bg-yellow-50 p-4 rounded-lg">
-                                        <div className="text-2xl font-bold text-yellow-600">
-                                            {report.attendance?.summary?.punctualityRate || report.attendance?.punctualityRate || '0%'}
-                                        </div>
-                                        <div className="text-sm text-yellow-600">Punctuality Rate</div>
-                                    </div>
-                                    <div className="bg-purple-50 p-4 rounded-lg">
-                                        <div className="text-2xl font-bold text-purple-600">
-                                            {report.attendance?.summary?.hoursComplianceRate || report.attendance?.hoursComplianceRate || '0%'}
-                                        </div>
-                                        <div className="text-sm text-purple-600">Hours Compliance</div>
-                                    </div>
-                                </div>
-
-                                {/* Detailed Attendance Table */}
-                                {report.attendance?.detailedRecords && report.attendance.detailedRecords.length > 0 && (
-                                    <div className="mt-6">
-                                        <h5 className="text-sm font-medium text-gray-700 mb-3">Detailed Attendance Records</h5>
-                                        <div className="overflow-x-auto">
-                                            <table className="min-w-full divide-y divide-gray-200">
-                                                <thead className="bg-gray-50">
-                                                    <tr>
-                                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                            Date
-                                                        </th>
-                                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                            Shift
-                                                        </th>
-                                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                            Login Time
-                                                        </th>
-                                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                            Hours Worked
-                                                        </th>
-                                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                            Late/Early
-                                                        </th>
-                                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                            Status
-                                                        </th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody className="bg-white divide-y divide-gray-200">
-                                                    {report.attendance.detailedRecords.map((record, idx) => (
-                                                        <tr key={idx} className="hover:bg-gray-50">
-                                                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                                                                {new Date(record.date).toLocaleDateString()}
-                                                            </td>
-                                                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                                                                {record.shift?.shiftName || 'N/A'}
-                                                            </td>
-                                                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                                                                {record.loginTime ? new Date(record.loginTime).toLocaleTimeString() : 'N/A'}
-                                                            </td>
-                                                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                                                                {record.hoursWorked?.toFixed(2) || '0'}h
-                                                            </td>
-                                                            <td className="px-4 py-3 whitespace-nowrap text-sm">
-                                                                {record.lateByMinutes > 0 && (
-                                                                    <span className="text-red-600">
-                                                                        Late: {record.lateByMinutes}m
-                                                                    </span>
-                                                                )}
-                                                                {record.earlyLeaveMinutes > 0 && (
-                                                                    <span className="text-orange-600">
-                                                                        {record.lateByMinutes > 0 ? ', ' : ''}
-                                                                        Early: {record.earlyLeaveMinutes}m
-                                                                    </span>
-                                                                )}
-                                                                {!record.lateByMinutes && !record.earlyLeaveMinutes && (
-                                                                    <span className="text-green-600">On Time</span>
-                                                                )}
-                                                            </td>
-                                                            <td className="px-4 py-3 whitespace-nowrap">
-                                                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize ${
-                                                                    record.status === 'on-duty' ? 'bg-green-100 text-green-800' :
-                                                                    record.status === 'off-duty' ? 'bg-gray-100 text-gray-800' :
-                                                                    record.status === 'late' ? 'bg-yellow-100 text-yellow-800' :
-                                                                    'bg-red-100 text-red-800'
-                                                                }`}>
-                                                                    {record.status || 'Unknown'}
-                                                                </span>
-                                                            </td>
-                                                        </tr>
-                                                    ))}
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    </div>
-                                )}
+                    {activeTab === 'guard-reports' && (
+                        <div>
+                            <div className="flex justify-between items-center mb-6">
+                                <h2 className="text-2xl font-bold text-gray-900">Guard Performance Reports</h2>
                             </div>
 
-                            {/* Patrol Performance Section */}
-                            <div>
-                                <h4 className="text-md font-medium text-gray-900 mb-4">Patrol Performance</h4>
-                                
-                                {/* Summary Cards */}
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                                    <div className="bg-indigo-50 p-4 rounded-lg">
-                                        <div className="text-2xl font-bold text-indigo-600">
-                                            {report.patrol?.summary?.totalCompletedCheckpoints || report.patrol?.totalCompletedCheckpoints || 0}
-                                        </div>
-                                        <div className="text-sm text-indigo-600">Completed</div>
-                                        <div className="text-xs text-gray-500">
-                                            of {report.patrol?.summary?.totalExpectedCheckpoints || report.patrol?.totalExpectedCheckpoints || 0} expected
-                                        </div>
-                                    </div>
-                                    <div className="bg-red-50 p-4 rounded-lg">
-                                        <div className="text-2xl font-bold text-red-600">
-                                            {report.patrol?.summary?.checkpointsMissed || report.patrol?.checkpointsMissed || 0}
-                                        </div>
-                                        <div className="text-sm text-red-600">Missed</div>
-                                    </div>
-                                    <div className="bg-green-50 p-4 rounded-lg">
-                                        <div className="text-2xl font-bold text-green-600">
-                                            {report.patrol?.summary?.uniqueCheckpointsCovered || report.patrol?.uniqueCheckpointsCovered || 0}
-                                        </div>
-                                        <div className="text-sm text-green-600">Unique Locations</div>
-                                    </div>
-                                    <div className="bg-purple-50 p-4 rounded-lg">
-                                        <div className="text-2xl font-bold text-purple-600">
-                                            {report.patrol?.summary?.completionRate || report.patrol?.completionRate || '0%'}
-                                        </div>
-                                        <div className="text-sm text-purple-600">Completion Rate</div>
-                                    </div>
-                                </div>
-
-                                {/* Checkpoint Details Table */}
-                                {report.patrol?.checkpointDetails && report.patrol.checkpointDetails.length > 0 && (
-                                    <div className="mt-6">
-                                        <h5 className="text-sm font-medium text-gray-700 mb-3">Checkpoint Performance Details</h5>
-                                        <div className="overflow-x-auto">
-                                            <table className="min-w-full divide-y divide-gray-200">
-                                                <thead className="bg-gray-50">
-                                                    <tr>
-                                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                            Plan
-                                                        </th>
-                                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                            Checkpoint
-                                                        </th>
-                                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                            Location
-                                                        </th>
-                                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                            Scans
-                                                        </th>
-                                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                            Completion
-                                                        </th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody className="bg-white divide-y divide-gray-200">
-                                                    {report.patrol.checkpointDetails.map((detail, idx) => (
-                                                        <tr key={idx} className="hover:bg-gray-50">
-                                                            <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
-                                                                {detail.planName}
-                                                            </td>
-                                                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                                                                {detail.checkpointName || 'Unnamed'}
-                                                            </td>
-                                                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                                                                {detail.location ? 
-                                                                    `${detail.location.lat?.toFixed(4)}, ${detail.location.lng?.toFixed(4)}` : 
-                                                                    'N/A'
-                                                                }
-                                                            </td>
-                                                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                                                                {detail.actualScans}/{detail.expectedScans}
-                                                            </td>
-                                                            <td className="px-4 py-3 whitespace-nowrap text-sm">
-                                                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                                                    parseFloat(detail.completionRate) >= 80 ? 'bg-green-100 text-green-800' :
-                                                                    parseFloat(detail.completionRate) >= 50 ? 'bg-yellow-100 text-yellow-800' :
-                                                                    'bg-red-100 text-red-800'
-                                                                }`}>
-                                                                    {detail.completionRate}%
-                                                                </span>
-                                                            </td>
-                                                        </tr>
-                                                    ))}
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* Scan Details Table */}
-                                {report.patrol?.checkpointDetails?.some(detail => detail.scanDetails) && (
-                                    <div className="mt-6">
-                                        <h5 className="text-sm font-medium text-gray-700 mb-3">Scan Details</h5>
-                                        <div className="space-y-4">
-                                            {report.patrol.checkpointDetails.map((detail, idx) => (
-                                                detail.scanDetails && detail.scanDetails.length > 0 && (
-                                                    <div key={idx} className="border rounded-lg">
-                                                        <div className="bg-gray-50 px-4 py-2 border-b">
-                                                            <h6 className="text-sm font-medium text-gray-900">
-                                                                {detail.checkpointName || 'Unnamed Checkpoint'} - {detail.planName}
-                                                            </h6>
-                                                        </div>
-                                                        <div className="overflow-x-auto">
-                                                            <table className="min-w-full divide-y divide-gray-200">
-                                                                <thead className="bg-white">
-                                                                    <tr>
-                                                                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                                            Timestamp
-                                                                        </th>
-                                                                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                                            Round
-                                                                        </th>
-                                                                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                                            Distance
-                                                                        </th>
-                                                                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                                            Status
-                                                                        </th>
-                                                                    </tr>
-                                                                </thead>
-                                                                <tbody className="bg-white divide-y divide-gray-200">
-                                                                    {detail.scanDetails.map((scan, scanIdx) => (
-                                                                        <tr key={scanIdx} className="hover:bg-gray-50">
-                                                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
-                                                                                {new Date(scan.timestamp).toLocaleString()}
-                                                                            </td>
-                                                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
-                                                                                Round {scan.roundNumber || 1}
-                                                                            </td>
-                                                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
-                                                                                {scan.distanceFromCheckpoint?.toFixed(2) || '0'}m
-                                                                            </td>
-                                                                            <td className="px-4 py-2 whitespace-nowrap text-sm">
-                                                                                {scan.verified ? (
-                                                                                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                                                                                        <CheckCircle className="w-3 h-3 mr-1" />
-                                                                                        Verified
-                                                                                    </span>
-                                                                                ) : (
-                                                                                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-                                                                                        Unverified
-                                                                                    </span>
-                                                                                )}
-                                                                            </td>
-                                                                        </tr>
-                                                                    ))}
-                                                                </tbody>
-                                                            </table>
-                                                        </div>
-                                                    </div>
-                                                )
+                            {/* Report Generator - Same as before */}
+                            <div className="bg-white p-6 rounded-lg shadow mb-6">
+                                <h3 className="text-lg font-medium text-gray-900 mb-4">Generate Performance Report</h3>
+                                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Select Guard</label>
+                                        <select
+                                            value={selectedGuard}
+                                            onChange={(e) => setSelectedGuard(e.target.value)}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                                        >
+                                            <option value="">Choose a guard</option>
+                                            {guards.filter(guard => guard.isActive).map(guard => (
+                                                <option key={guard._id} value={guard._id}>
+                                                    {guard.name}
+                                                </option>
                                             ))}
-                                        </div>
+                                        </select>
                                     </div>
-                                )}
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
+                                        <input
+                                            type="date"
+                                            value={reportFilters.startDate}
+                                            onChange={(e) => setReportFilters(prev => ({ ...prev, startDate: e.target.value }))}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">End Date</label>
+                                        <input
+                                            type="date"
+                                            value={reportFilters.endDate}
+                                            onChange={(e) => setReportFilters(prev => ({ ...prev, endDate: e.target.value }))}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Shift (Optional)</label>
+                                        <select
+                                            value={reportFilters.shiftId}
+                                            onChange={(e) => setReportFilters(prev => ({ ...prev, shiftId: e.target.value }))}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                                        >
+                                            <option value="">All Shifts</option>
+                                            {shifts.map(shift => (
+                                                <option key={shift._id} value={shift._id}>
+                                                    {shift.shiftName || shift.shiftType}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={handleGenerateReport}
+                                    disabled={!selectedGuard || generatingReport}
+                                    className="flex items-center px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    {generatingReport ? (
+                                        <>
+                                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                            Generating...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <FileText className="w-4 h-4 mr-2" />
+                                            Generate Report
+                                        </>
+                                    )}
+                                </button>
                             </div>
 
-                            {/* Incidents Section */}
-                            {report.incidents && (
-                                <div>
-                                    <h4 className="text-md font-medium text-gray-900 mb-4">Incident Reports</h4>
-                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                                        <div className="bg-red-50 p-4 rounded-lg">
-                                            <div className="text-2xl font-bold text-red-600">
-                                                {report.incidents.totalReported || 0}
-                                            </div>
-                                            <div className="text-sm text-red-600">Total Incidents</div>
-                                        </div>
-                                        {report.incidents.bySeverity && Object.entries(report.incidents.bySeverity).map(([severity, count]) => (
-                                            <div key={severity} className={`p-4 rounded-lg ${
-                                                severity === 'critical' ? 'bg-red-100' :
-                                                severity === 'high' ? 'bg-orange-100' :
-                                                severity === 'medium' ? 'bg-yellow-100' :
-                                                'bg-green-100'
-                                            }`}>
-                                                <div className="text-2xl font-bold text-gray-900">{count}</div>
-                                                <div className="text-sm text-gray-600 capitalize">{severity}</div>
-                                            </div>
-                                        ))}
+                            {/* Reports List */}
+                            <div className="space-y-6">
+                                {guardReports.length === 0 ? (
+                                    <div className="text-center py-12 bg-white rounded-lg shadow">
+                                        <FileText className="mx-auto h-16 w-16 text-gray-400" />
+                                        <h3 className="mt-4 text-lg font-medium text-gray-900">No reports generated</h3>
+                                        <p className="mt-2 text-sm text-gray-500">
+                                            Generate a performance report to see guard analytics and metrics.
+                                        </p>
                                     </div>
+                                ) : (
+                                    guardReports.map((report, index) => (
+                                        <div key={index} className="bg-white rounded-lg shadow overflow-hidden">
+                                            {/* Report Header */}
+                                            <div className="bg-gray-50 px-6 py-4 border-b">
+                                                <div className="flex justify-between items-center">
+                                                    <div>
+                                                        <h3 className="text-lg font-medium text-gray-900">
+                                                            {report.guard?.name || 'Unknown Guard'} - Performance Report
+                                                        </h3>
+                                                        <p className="text-sm text-gray-500">
+                                                            Period: {new Date(report.reportPeriod?.startDate).toLocaleDateString()} - {new Date(report.reportPeriod?.endDate).toLocaleDateString()}
+                                                            {report.reportPeriod?.totalDays && (
+                                                                <span className="ml-2">({report.reportPeriod.totalDays} days)</span>
+                                                            )}
+                                                        </p>
+                                                        <p className="text-sm text-gray-500">
+                                                            Phone: {report.guard?.phone} 
+                                                            {/* Status: <span className="font-medium capitalize">{report.guard?.currentStatus || 'Unknown'}</span> •
+                                                            Shift: {report.guard?.currentShift || 'Not assigned'} */}
+                                                        </p>
+                                                    </div>
+                                                    <div className="flex items-center space-x-3">
+                                                        <div className="text-right">
+                                                            <div className={`text-2xl font-bold ${parseFloat(report.performance?.overallScore || '0') >= 80 ? 'text-green-600' :
+                                                                parseFloat(report.performance?.overallScore || '0') >= 60 ? 'text-yellow-600' :
+                                                                    'text-red-600'
+                                                                }`}>
+                                                                {report.performance?.overallScore || '0'}%
+                                                            </div>
+                                                            <div className="text-xs text-gray-500">
+                                                                {report.performance?.rating || 'Overall Score'}
+                                                            </div>
+                                                        </div>
+                                                        <button
+                                                            onClick={() => downloadExcelReport(report)}
+                                                            className="flex items-center px-3 py-2 text-sm text-white bg-green-600 border border-green-700 rounded-md hover:bg-green-700"
+                                                        >
+                                                            <Download className="w-4 h-4 mr-1" />
+                                                            Excel
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
 
-                                    {/* Incident Details Table */}
-                                    {report.incidents.details && report.incidents.details.length > 0 && (
-                                        <div className="mt-6">
-                                            <h5 className="text-sm font-medium text-gray-700 mb-3">Incident Details</h5>
-                                            <div className="overflow-x-auto">
-                                                <table className="min-w-full divide-y divide-gray-200">
-                                                    <thead className="bg-gray-50">
-                                                        <tr>
-                                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                                Title
-                                                            </th>
-                                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                                Type
-                                                            </th>
-                                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                                Severity
-                                                            </th>
-                                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                                Status
-                                                            </th>
-                                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                                Date
-                                                            </th>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody className="bg-white divide-y divide-gray-200">
-                                                        {report.incidents.details.map((incident, idx) => (
-                                                            <tr key={idx} className="hover:bg-gray-50">
-                                                                <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
-                                                                    {incident.title}
-                                                                </td>
-                                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 capitalize">
-                                                                    {incident.type}
-                                                                </td>
-                                                                <td className="px-4 py-3 whitespace-nowrap text-sm">
-                                                                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                                                        incident.severity === 'critical' ? 'bg-red-100 text-red-800' :
-                                                                        incident.severity === 'high' ? 'bg-orange-100 text-orange-800' :
-                                                                        incident.severity === 'medium' ? 'bg-yellow-100 text-yellow-800' :
-                                                                        'bg-green-100 text-green-800'
-                                                                    }`}>
-                                                                        {incident.severity}
-                                                                    </span>
-                                                                </td>
-                                                                <td className="px-4 py-3 whitespace-nowrap text-sm">
-                                                                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                                                        incident.status === 'closed' ? 'bg-green-100 text-green-800' :
-                                                                        incident.status === 'resolved' ? 'bg-blue-100 text-blue-800' :
-                                                                        incident.status === 'in-progress' ? 'bg-yellow-100 text-yellow-800' :
-                                                                        'bg-gray-100 text-gray-800'
-                                                                    }`}>
-                                                                        {incident.status}
-                                                                    </span>
-                                                                </td>
-                                                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                                                                    {new Date(incident.createdAt).toLocaleDateString()}
-                                                                </td>
-                                                            </tr>
-                                                        ))}
-                                                    </tbody>
-                                                </table>
+                                            {/* Performance Summary */}
+                                            <div className="px-6 py-4 border-b bg-indigo-50">
+                                                <h4 className="text-md font-medium text-gray-900 mb-3">Performance Summary</h4>
+                                                <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                                                    <div className="text-center">
+                                                        {/* <div className={`text-lg font-bold ${parseFloat(report.performance?.breakdown?.attendanceScore) >= 80 ? 'text-green-600' :
+                                                            parseFloat(report.performance?.breakdown?.attendanceScore) >= 60 ? 'text-yellow-600' :
+                                                                'text-red-600'
+                                                            }`}>
+                                                            {report.performance?.breakdown?.attendanceScore || '0'}%
+                                                        </div> */}
+                                                        {/* <div className="text-sm text-gray-600">Attendance</div> */}
+                                                    </div>
+                                                    {/* <div className="text-center">
+                                                        <div className={`text-lg font-bold ${parseFloat(report.performance?.breakdown?.roundsScore) >= 80 ? 'text-green-600' :
+                                                            parseFloat(report.performance?.breakdown?.roundsScore) >= 60 ? 'text-yellow-600' :
+                                                                'text-red-600'
+                                                            }`}>
+                                                            {report.performance?.breakdown?.roundsScore || '0'}%
+                                                        </div>
+                                                        <div className="text-sm text-gray-600">Rounds</div>
+                                                    </div>
+                                                    <div className="text-center">
+                                                        <div className="text-lg font-bold text-blue-600">
+                                                            {report.attendance?.presentDays || 0}/{report.attendance?.totalDays || 0}
+                                                        </div>
+                                                        <div className="text-sm text-gray-600">Present/Total</div>
+                                                    </div> */}
+                                                    <div className="text-center">
+                                                        <div className="text-lg font-bold text-purple-600">
+                                                            {report.roundsPerformance?.summary?.completedScans || 0}/{report.roundsPerformance?.summary?.totalScans || 0}
+                                                        </div>
+                                                        <div className="text-sm text-gray-600">Scans Done</div>
+                                                    </div>
+                                                    <div className="text-center">
+                                                        <div className="text-lg font-bold text-indigo-600">
+                                                            {report.summary?.efficiency || '0%'}
+                                                        </div>
+                                                        <div className="text-sm text-gray-600">Efficiency</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Detailed Rounds Performance Table */}
+                                            <div className="p-6">
+                                                <div className="flex justify-between items-center mb-4">
+                                                    <h4 className="text-md font-medium text-gray-900">Detailed Patrol Rounds</h4>
+                                                    <div className="text-sm text-gray-500">
+                                                        Total Records: {report.detailedRounds?.length || 0}
+                                                    </div>
+                                                </div>
+
+                                                {report.detailedRounds && report.detailedRounds.length > 0 ? (
+                                                    <div className="overflow-x-auto">
+                                                        <table className="min-w-full divide-y divide-gray-200">
+                                                            <thead className="bg-gray-50">
+                                                                <tr>
+                                                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                                        Date
+                                                                    </th>
+                                                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                                        Round
+                                                                    </th>
+                                                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                                        Plan Name
+                                                                    </th>
+                                                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                                        Checkpoint
+                                                                    </th>
+                                                                    {/* <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                                        Location
+                                                                    </th>
+                                                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                                        Expected Time
+                                                                    </th> */}
+                                                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                                        Actual Time
+                                                                    </th>
+                                                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                                        Status
+                                                                    </th>
+                                                                    {/* <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                                        Delay
+                                                                    </th> */}
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody className="bg-white divide-y divide-gray-200">
+                                                                {report.detailedRounds.map((round, idx) => (
+                                                                    <tr key={idx} className="hover:bg-gray-50">
+                                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                                                                            {new Date(round.date).toLocaleDateString()}
+                                                                        </td>
+                                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                                                                            Round {round.roundNumber}
+                                                                        </td>
+                                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 font-medium">
+                                                                            {round.planName || 'N/A'}
+                                                                        </td>
+                                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                                                                            <div>
+                                                                                <div className="font-medium">{round.checkpointName}</div>
+                                                                                {round.checkpointDescription && (
+                                                                                    <div className="text-xs text-gray-400">{round.checkpointDescription}</div>
+                                                                                )}
+                                                                            </div>
+                                                                        </td>
+                                                                        {/* <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                                                                            {round.location || 'N/A'}
+                                                                            {round.latitude && round.longitude && (
+                                                                                <div className="text-xs text-gray-400">
+                                                                                    {round.latitude.toFixed(4)}, {round.longitude.toFixed(4)}
+                                                                                </div>
+                                                                            )}
+                                                                        </td>
+                                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                                                                            {round.expectedTime ? new Date(round.expectedTime).toLocaleTimeString() : 'N/A'}
+                                                                        </td> */}
+                                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                                                                            {round.actualTime ? new Date(round.actualTime).toLocaleTimeString() : 'Not Scanned'}
+                                                                        </td>
+                                                                        <td className="px-4 py-3 whitespace-nowrap">
+                                                                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${round.status === 'completed' ? 'bg-green-100 text-green-800' :
+                                                                                    round.status === 'missed' ? 'bg-red-100 text-red-800' :
+                                                                                        round.status === 'delayed' ? 'bg-yellow-100 text-yellow-800' :
+                                                                                            'bg-gray-100 text-gray-800'
+                                                                                }`}>
+                                                                                {round.status ? round.status.charAt(0).toUpperCase() + round.status.slice(1) : 'Pending'}
+                                                                            </span>
+                                                                        </td>
+                                                                        {/* <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                                                                            {round.delay ? `${round.delay} mins` : 'N/A'}
+                                                                        </td> */}
+                                                                    </tr>
+                                                                ))}
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                ) : (
+                                                    <div className="text-center py-8 bg-gray-50 rounded-lg">
+                                                        <Target className="mx-auto h-8 w-8 text-gray-400" />
+                                                        <p className="mt-2 text-sm text-gray-500">No patrol rounds data available for this period</p>
+                                                        <p className="text-xs text-gray-400">The guard may not have any assigned patrol plans or scans</p>
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
-                                    )}
-                                </div>
-                            )}
+                                    ))
+                                )}
+                            </div>
                         </div>
-                    </div>
-                ))
-            )}
-        </div>
-    </div>
-)}
+                    )}
+
+
+
+
+
+
+
+
                     {/* QR Codes Tab */}
                     {/* {activeTab === 'qr-codes' && (
                         <div>
@@ -2518,6 +2755,7 @@ const [guardReports, setGuardReports] = useState([]);
                                         />
                                         {errors.shiftName && <p className="text-red-500 text-xs mt-1">{errors.shiftName.message}</p>}
                                     </div>
+
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700">Shift Type</label>
                                         <select
@@ -2531,26 +2769,27 @@ const [guardReports, setGuardReports] = useState([]);
                                         </select>
                                         {errors.shiftType && <p className="text-red-500 text-xs mt-1">{errors.shiftType.message}</p>}
                                     </div>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700">Start Time</label>
-                                            <input
-                                                {...register('startTime', { required: 'Start time is required' })}
-                                                type="datetime-local"
-                                                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                                            />
-                                            {errors.startTime && <p className="text-red-500 text-xs mt-1">{errors.startTime.message}</p>}
-                                        </div>
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700">End Time</label>
-                                            <input
-                                                {...register('endTime', { required: 'End time is required' })}
-                                                type="datetime-local"
-                                                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                                            />
-                                            {errors.endTime && <p className="text-red-500 text-xs mt-1">{errors.endTime.message}</p>}
-                                        </div>
-                                    </div>
+
+                                    {/* FIXED: Use datetime-local with proper conversion */}
+                                  <div className="grid grid-cols-2 gap-4">
+  <div>
+    <label className="block text-sm font-medium text-gray-700">Start Date & Time</label>
+    <input
+      {...register('startTime', { required: 'Start time is required' })}
+      type="datetime-local"
+      className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+    />
+  </div>
+  <div>
+    <label className="block text-sm font-medium text-gray-700">End Date & Time</label>
+    <input
+      {...register('endTime', { required: 'End time is required' })}
+      type="datetime-local"
+      className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+    />
+  </div>
+</div>
+
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700">Assign Guards</label>
                                         <select
@@ -2568,7 +2807,6 @@ const [guardReports, setGuardReports] = useState([]);
                                     </div>
                                 </>
                             )}
-
 {modalType === 'plan' && (
   <>
     <div className="grid grid-cols-2 gap-4">
@@ -2666,7 +2904,12 @@ const [guardReports, setGuardReports] = useState([]);
     <div className="border-t pt-4">
       <div className="flex justify-between items-center mb-4">
         <h4 className="text-md font-medium text-gray-900">Checkpoints</h4>
-        <button
+                                            :  {essentialDataLoading.qrCodes ? (
+                                                <div className="flex items-center text-sm text-gray-500">
+                                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-indigo-600 mr-2"></div>
+                                                    Loading QR codes...
+                                                </div>
+                                            ) : ( <button
           type="button"
           onClick={() => addCheckpoint({ qrId: '', siteId: '', expectedTime: 5 })}
           className="flex items-center px-3 py-1 text-sm text-white bg-indigo-600 rounded-md hover:bg-indigo-700"
@@ -2674,9 +2917,15 @@ const [guardReports, setGuardReports] = useState([]);
           <Plus className="w-4 h-4 mr-1" />
           Add Checkpoint
         </button>
+                                            )}
       </div>
 
-      {checkpointFields.length === 0 ? (
+                                        {essentialDataLoading.qrCodes ? (
+                                            <div className="text-center py-4">
+                                                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto"></div>
+                                                <p className="mt-2 text-sm text-gray-500">Loading QR codes...</p>
+                                            </div>
+                                        ) : checkpointFields.length === 0 ? (
         <div className="text-center py-4 border-2 border-dashed border-gray-300 rounded-md">
           <MapPin className="mx-auto h-8 w-8 text-gray-400" />
           <p className="mt-2 text-sm text-gray-500">No checkpoints added</p>

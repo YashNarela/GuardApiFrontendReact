@@ -4,7 +4,7 @@ import {
     LogOut, Shield, Target, AlertTriangle, BarChart3, Clock,
     Camera, MapPin, CheckCircle, XCircle, FileText, Plus
 } from 'lucide-react';
-import axios from 'axios';
+import axios from '../services/axiosConfig';
 import toast from 'react-hot-toast';
 import { useForm } from 'react-hook-form';
 
