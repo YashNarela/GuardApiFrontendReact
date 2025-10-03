@@ -13,16 +13,16 @@ import toast from 'react-hot-toast';
 import { useForm, useFieldArray } from 'react-hook-form';
 import moment from 'moment-timezone';
 
-const [essentialDataLoading, setEssentialDataLoading] = useState({
-    guards: false,
-    qrCodes: false,
-    shifts: false
-});
 
 // Timezone configuration - adjust based on your requirements
 const APP_TIMEZONE = 'Asia/Kolkata'; // Change to your preferred timezone
 
 const SupervisorDashboard = () => {
+    const [essentialDataLoading, setEssentialDataLoading] = useState({
+        guards: false,
+        qrCodes: false,
+        shifts: false
+    });
 
         const [incidentStats, setIncidentStats] = useState(null);
     const [statsPeriod, setStatsPeriod] = useState("month"); // week, month, year
