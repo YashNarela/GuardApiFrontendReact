@@ -30,6 +30,12 @@ const AdminDashboard = () => {
         }
     };
 
+
+    const validatePhone = (phone) => {
+        const phoneRegex = /^\d{10}$/;
+        return phoneRegex.test(phone.replace(/\D/g, ''));
+    };
+
     const createEmployee = async (data) => {
         try {
 
@@ -232,18 +238,19 @@ const AdminDashboard = () => {
                                 )}
                             </div>
 
-                                          <div>
+                            <div>
                                 <label className="block text-sm font-medium text-gray-700">Phone</label>
                                 <input
                                     type="tel"
                                     {...register('phone', {
-                                        pattern: {
-                                            value: /^[+]?[\d\s\-()]+$/,
-                                            message: 'Please enter a valid phone number'
+                                        required: 'Phone is required',
+                                        validate: {
+                                            validPhone: (value) => validatePhone(value) || 'Phone number must be exactly 10 digits'
                                         }
                                     })}
                                     className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
                                     placeholder="9909090909"
+                                    maxLength="10"
                                 />
                                 {errors.phone && <p className="text-red-500 text-xs mt-1">{errors.phone.message}</p>}
                             </div>
