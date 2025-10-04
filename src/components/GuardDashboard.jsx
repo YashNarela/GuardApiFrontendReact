@@ -38,24 +38,24 @@ const handleLogout = async () => {
     setLoading(true);
     const token = localStorage.getItem('token');
     
-    if (token) {
-      try {
-        await axios.post(
-          'http://localhost:2042/api/auth/logout', 
-          {}, 
-          {
-            headers: { 
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json'
-            },
-            timeout: 5000 // 5 second timeout
-          }
-        );
-      } catch (apiError) {
-        console.warn('Logout API call failed, but continuing with local logout:', apiError);
-        // Continue with local logout even if API call fails
-      }
-    }
+    // if (token) {
+    //   try {
+    //     await axios.post(
+    //       'http://localhost:2042/api/auth/logout', 
+    //       {}, 
+    //       {
+    //         headers: { 
+    //           'Authorization': `Bearer ${token}`,
+    //           'Content-Type': 'application/json'
+    //         },
+    //         timeout: 5000 // 5 second timeout
+    //       }
+    //     );
+    //   } catch (apiError) {
+    //     console.warn('Logout API call failed, but continuing with local logout:', apiError);
+    //     // Continue with local logout even if API call fails
+    //   }
+    // }
     
     // Clear all local storage items related to auth
     localStorage.removeItem('token');
