@@ -76,6 +76,12 @@ const [guardReports, setGuardReports] = useState([]);
         name: 'checkpoints'
     });
 
+    const validatePhone = (phone) => {
+        const phoneRegex = /^\d{10}$/;
+        return phoneRegex.test(phone.replace(/\D/g, ''));
+    };
+
+
     const utcToLocalDateTime = (utcTimeString) => {
         if (!utcTimeString) return '';
 
@@ -104,6 +110,11 @@ const [guardReports, setGuardReports] = useState([]);
         return moment.utc(utcTimeString).tz(timezone).format('hh:mm A z');
     };
 
+    // Add this date-only formatting function
+    const formatDateOnlyForDisplay = (utcTimeString) => {
+        if (!utcTimeString) return 'N/A';
+        return moment.utc(utcTimeString).format('MM/DD/YYYY');
+    };
 
 
     const downloadExcelReport = (report) => {
@@ -124,7 +135,9 @@ const [guardReports, setGuardReports] = useState([]);
                 ['Basic Information'],
                 ['Guard Name', report.guard?.name || 'N/A'],
                 ['Phone Number', report.guard?.phone || 'N/A'],
-                ['Report Period', `${new Date(report.reportPeriod?.startDate).toLocaleDateString()} - ${new Date(report.reportPeriod?.endDate).toLocaleDateString()}`],
+                // ['Report Period', `${new Date(report.reportPeriod?.startDate).toLocaleDateString()} - ${new Date(report.reportPeriod?.endDate).toLocaleDateString()}`],
+               
+                'Report Period', `${formatDateTimeForDisplay(report.reportPeriod?.startDate).split(' at')[0]} - ${formatDateTimeForDisplay(report.reportPeriod?.endDate).split(' at')[0]}`,
                 ['Total Days', report.reportPeriod?.totalDays || 0],
                 [],
                 ['Performance Overview'],
@@ -175,7 +188,8 @@ const [guardReports, setGuardReports] = useState([]);
                     round.planName || 'N/A',
                     round.checkpointName || 'N/A',
                     round.checkpointDescription || 'N/A',
-                    round.actualTime ? new Date(round.actualTime).toLocaleTimeString() : 'Not Scanned',
+                    // round.actualTime ? new Date(round.actualTime).toLocaleTimeString() : 'Not Scanned',
+                     round.actualTime ? formatTimeForDisplay(round.actualTime).split(' ').slice(0, 2).join(' ') : 'Not Scanned' ,
                     round.status ? round.status.charAt(0).toUpperCase() + round.status.slice(1) : 'Pending'
                 ]);
 
@@ -2086,7 +2100,7 @@ const [guardReports, setGuardReports] = useState([]);
                                 <h2 className="text-2xl font-bold text-gray-900">Guard Performance Reports</h2>
                             </div>
 
-                            {/* Report Generator - Same as before */}
+                            {/* Report Generator */}
                             <div className="bg-white p-6 rounded-lg shadow mb-6">
                                 <h3 className="text-lg font-medium text-gray-900 mb-4">Generate Performance Report</h3>
                                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
@@ -2179,15 +2193,13 @@ const [guardReports, setGuardReports] = useState([]);
                                                             {report.guard?.name || 'Unknown Guard'} - Performance Report
                                                         </h3>
                                                         <p className="text-sm text-gray-500">
-                                                            Period: {new Date(report.reportPeriod?.startDate).toLocaleDateString()} - {new Date(report.reportPeriod?.endDate).toLocaleDateString()}
+                                                            Period: {formatDateTimeForDisplay(report.reportPeriod?.startDate).split(',')[0]} - {formatDateTimeForDisplay(report.reportPeriod?.endDate).split(',')[0]}
                                                             {report.reportPeriod?.totalDays && (
                                                                 <span className="ml-2">({report.reportPeriod.totalDays} days)</span>
                                                             )}
                                                         </p>
                                                         <p className="text-sm text-gray-500">
-                                                            Phone: {report.guard?.phone} 
-                                                            {/* Status: <span className="font-medium capitalize">{report.guard?.currentStatus || 'Unknown'}</span> •
-                                                            Shift: {report.guard?.currentShift || 'Not assigned'} */}
+                                                            Phone: {report.guard?.phone}
                                                         </p>
                                                     </div>
                                                     <div className="flex items-center space-x-3">
@@ -2216,42 +2228,84 @@ const [guardReports, setGuardReports] = useState([]);
                                             {/* Performance Summary */}
                                             <div className="px-6 py-4 border-b bg-indigo-50">
                                                 <h4 className="text-md font-medium text-gray-900 mb-3">Performance Summary</h4>
-                                                <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                                                    <div className="text-center">
-                                                        {/* <div className={`text-lg font-bold ${parseFloat(report.performance?.breakdown?.attendanceScore) >= 80 ? 'text-green-600' :
-                                                            parseFloat(report.performance?.breakdown?.attendanceScore) >= 60 ? 'text-yellow-600' :
-                                                                'text-red-600'
-                                                            }`}>
-                                                            {report.performance?.breakdown?.attendanceScore || '0'}%
-                                                        </div> */}
-                                                        {/* <div className="text-sm text-gray-600">Attendance</div> */}
-                                                    </div>
-                                                    {/* <div className="text-center">
-                                                        <div className={`text-lg font-bold ${parseFloat(report.performance?.breakdown?.roundsScore) >= 80 ? 'text-green-600' :
-                                                            parseFloat(report.performance?.breakdown?.roundsScore) >= 60 ? 'text-yellow-600' :
-                                                                'text-red-600'
-                                                            }`}>
-                                                            {report.performance?.breakdown?.roundsScore || '0'}%
-                                                        </div>
-                                                        <div className="text-sm text-gray-600">Rounds</div>
-                                                    </div>
+                                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                                                     <div className="text-center">
                                                         <div className="text-lg font-bold text-blue-600">
-                                                            {report.attendance?.presentDays || 0}/{report.attendance?.totalDays || 0}
+                                                            {report.roundsPerformance?.summary?.totalCompletedRounds || 0}/{report.roundsPerformance?.summary?.totalExpectedRounds || 0}
                                                         </div>
-                                                        <div className="text-sm text-gray-600">Present/Total</div>
-                                                    </div> */}
+                                                        <div className="text-sm text-gray-600">Rounds Completed</div>
+                                                    </div>
                                                     <div className="text-center">
                                                         <div className="text-lg font-bold text-purple-600">
-                                                            {report.roundsPerformance?.summary?.completedScans || 0}/{report.roundsPerformance?.summary?.totalScans || 0}
+                                                            {report.roundsPerformance?.summary?.totalCompletedScans || 0}/{report.roundsPerformance?.summary?.totalExpectedScans || 0}
                                                         </div>
-                                                        <div className="text-sm text-gray-600">Scans Done</div>
+                                                        <div className="text-sm text-gray-600">Scans Completed</div>
+                                                    </div>
+                                                    <div className="text-center">
+                                                        <div className={`text-lg font-bold ${parseFloat(report.roundsPerformance?.summary?.roundsCompletionRate) >= 80 ? 'text-green-600' :
+                                                            parseFloat(report.roundsPerformance?.summary?.roundsCompletionRate) >= 60 ? 'text-yellow-600' :
+                                                                'text-red-600'
+                                                            }`}>
+                                                            {report.roundsPerformance?.summary?.roundsCompletionRate || '0%'}
+                                                        </div>
+                                                        <div className="text-sm text-gray-600">Rounds Completion</div>
                                                     </div>
                                                     <div className="text-center">
                                                         <div className="text-lg font-bold text-indigo-600">
                                                             {report.summary?.efficiency || '0%'}
                                                         </div>
-                                                        <div className="text-sm text-gray-600">Efficiency</div>
+                                                        <div className="text-sm text-gray-600">Overall Efficiency</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Plan Breakdown */}
+                                            {report.roundsPerformance?.planBreakdown && report.roundsPerformance.planBreakdown.length > 0 && (
+                                                <div className="px-6 py-4 border-b bg-white">
+                                                    <h4 className="text-md font-medium text-gray-900 mb-3">Plan Breakdown</h4>
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                                        {report.roundsPerformance.planBreakdown.map((plan, idx) => (
+                                                            <div key={idx} className="bg-white border border-gray-200 rounded-lg p-4">
+                                                                <h5 className="font-medium text-gray-900 mb-2">{plan.planName}</h5>
+                                                                <div className="space-y-2 text-sm">
+                                                                    <div className="flex justify-between">
+                                                                        <span className="text-gray-600">Rounds:</span>
+                                                                        <span className="font-medium">{plan.completedRounds}/{plan.totalRounds}</span>
+                                                                    </div>
+                                                                    <div className="flex justify-between">
+                                                                        <span className="text-gray-600">Scans:</span>
+                                                                        <span className="font-medium">{plan.completedScans}/{plan.totalRounds * plan.totalCheckpoints}</span>
+                                                                    </div>
+                                                                    <div className="flex justify-between">
+                                                                        <span className="text-gray-600">Completion:</span>
+                                                                        <span className={`font-medium ${parseFloat(plan.completionRate) >= 80 ? 'text-green-600' :
+                                                                            parseFloat(plan.completionRate) >= 60 ? 'text-yellow-600' :
+                                                                                'text-red-600'
+                                                                            }`}>
+                                                                            {plan.completionRate}
+                                                                        </span>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* Progress Summary */}
+                                            <div className="px-6 py-4 border-b bg-green-50">
+                                                <div className="flex items-center justify-between">
+                                                    <div>
+                                                        <h4 className="text-md font-medium text-gray-900">Progress Summary</h4>
+                                                        <p className="text-sm text-gray-600 mt-1">{report.summary?.progress}</p>
+                                                    </div>
+                                                    <div className="text-right">
+                                                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${report.summary?.status === 'Good' ? 'bg-green-100 text-green-800' :
+                                                            report.summary?.status === 'Needs Improvement' ? 'bg-yellow-100 text-yellow-800' :
+                                                                'bg-red-100 text-red-800'
+                                                            }`}>
+                                                            {report.summary?.status}
+                                                        </span>
                                                     </div>
                                                 </div>
                                             </div>
@@ -2282,28 +2336,22 @@ const [guardReports, setGuardReports] = useState([]);
                                                                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                                                         Checkpoint
                                                                     </th>
-                                                                    {/* <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                                        Location
-                                                                    </th>
-                                                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                                        Expected Time
-                                                                    </th> */}
                                                                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                                                         Actual Time
                                                                     </th>
                                                                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                                                         Status
                                                                     </th>
-                                                                    {/* <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                                        Delay
-                                                                    </th> */}
+                                                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                                        Distance
+                                                                    </th>
                                                                 </tr>
                                                             </thead>
                                                             <tbody className="bg-white divide-y divide-gray-200">
                                                                 {report.detailedRounds.map((round, idx) => (
                                                                     <tr key={idx} className="hover:bg-gray-50">
                                                                         <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                                                                            {new Date(round.date).toLocaleDateString()}
+                                                                            {formatDateTimeForDisplay(round.date).split(' ').slice(0, 3).join(' ')}
                                                                         </td>
                                                                         <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
                                                                             Round {round.roundNumber}
@@ -2319,32 +2367,20 @@ const [guardReports, setGuardReports] = useState([]);
                                                                                 )}
                                                                             </div>
                                                                         </td>
-                                                                        {/* <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                                                                            {round.location || 'N/A'}
-                                                                            {round.latitude && round.longitude && (
-                                                                                <div className="text-xs text-gray-400">
-                                                                                    {round.latitude.toFixed(4)}, {round.longitude.toFixed(4)}
-                                                                                </div>
-                                                                            )}
-                                                                        </td>
                                                                         <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                                                                            {round.expectedTime ? new Date(round.expectedTime).toLocaleTimeString() : 'N/A'}
-                                                                        </td> */}
-                                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                                                                            {round.actualTime ? new Date(round.actualTime).toLocaleTimeString() : 'Not Scanned'}
+                                                                            {round.actualTime ? formatTimeForDisplay(round.actualTime).split(' ').slice(0, 2).join(' ') : 'Not Scanned'}
                                                                         </td>
                                                                         <td className="px-4 py-3 whitespace-nowrap">
                                                                             <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${round.status === 'completed' ? 'bg-green-100 text-green-800' :
-                                                                                    round.status === 'missed' ? 'bg-red-100 text-red-800' :
-                                                                                        round.status === 'delayed' ? 'bg-yellow-100 text-yellow-800' :
-                                                                                            'bg-gray-100 text-gray-800'
+                                                                                round.status === 'missed' ? 'bg-red-100 text-red-800' :
+                                                                                    'bg-gray-100 text-gray-800'
                                                                                 }`}>
                                                                                 {round.status ? round.status.charAt(0).toUpperCase() + round.status.slice(1) : 'Pending'}
                                                                             </span>
                                                                         </td>
-                                                                        {/* <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                                                                            {round.delay ? `${round.delay} mins` : 'N/A'}
-                                                                        </td> */}
+                                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                                                                            {round.distanceMeters ? `${round.distanceMeters}m` : 'N/A'}
+                                                                        </td>
                                                                     </tr>
                                                                 ))}
                                                             </tbody>
@@ -2364,7 +2400,6 @@ const [guardReports, setGuardReports] = useState([]);
                             </div>
                         </div>
                     )}
-
 
 
 
@@ -2693,10 +2728,18 @@ const [guardReports, setGuardReports] = useState([]);
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700">Phone</label>
                                         <input
-                                            {...register('phone')}
-                                            type="text"
-                                            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                                            type="tel"
+                                            {...register('phone', {
+                                                required: 'Phone is required',
+                                                validate: {
+                                                    validPhone: (value) => validatePhone(value) || 'Phone number must be exactly 10 digits'
+                                                }
+                                            })}
+                                            className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
+                                            placeholder="9909090909"
+                                            maxLength="10"
                                         />
+                                        {errors.phone && <p className="text-red-500 text-xs mt-1">{errors.phone.message}</p>}
                                     </div>
 
                                     {/* Password Field - Always Available for Both Create and Edit */}
