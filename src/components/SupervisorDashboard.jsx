@@ -277,7 +277,14 @@ const SupervisorDashboard = () => {
 
     // Calculate shift duration properly
     
-    
+    const formatReportPeriod = (startDate, endDate, totalDays) => {
+        if (!startDate || !endDate) return 'N/A';
+
+        const start = moment.utc(startDate).format('MMM DD');
+        const end = moment.utc(endDate).format('MMM DD');
+
+        return `Period: ${start} - ${end}${totalDays ? ` (${totalDays} days)` : ''}`;
+    };
     
     const downloadExcelReport = (report) => {
         try {
@@ -2332,9 +2339,10 @@ const SupervisorDashboard = () => {
                                                                 {report.guard?.name || 'Unknown Guard'} - Performance Report
                                                             </h3>
                                                             <p className="text-sm text-gray-500">
-                                                                Period: {formatDateTimeForDisplay(report.reportPeriod?.startDate).split(',')[0]} - {formatDateTimeForDisplay(report.reportPeriod?.endDate).split(',')[0]}
-                                                                {report.reportPeriod?.totalDays && (
-                                                                    <span className="ml-2">({report.reportPeriod.totalDays} days)</span>
+                                                                {formatReportPeriod(
+                                                                    report.reportPeriod?.startDate,
+                                                                    report.reportPeriod?.endDate,
+                                                                    report.reportPeriod?.totalDays
                                                                 )}
                                                             </p>
                                                             <p className="text-sm text-gray-500">
@@ -2490,7 +2498,7 @@ const SupervisorDashboard = () => {
                                                                     {report.detailedRounds.map((round, idx) => (
                                                                         <tr key={idx} className="hover:bg-gray-50">
                                                                             <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                                                                                {formatDateTimeForDisplay(round.date).split(' ').slice(0, 3).join(' ')}
+                                                                                {moment.utc(round.date).format('MMM DD, YYYY')}
                                                                             </td>
                                                                             <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
                                                                                 Round {round.roundNumber}
