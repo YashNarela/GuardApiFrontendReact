@@ -8,11 +8,12 @@ import {
     Shield, BarChart3, Target, AlertTriangle, Download,
     Eye, EyeOff, Search
 } from 'lucide-react';
+import moment from 'moment-timezone';
 import axios from '../services/axiosConfig';
 import toast from 'react-hot-toast';
 import { useForm } from 'react-hook-form';
 import * as XLSX from 'xlsx';
-
+const APP_TIMEZONE = 'Asia/Kolkata'; // Change to your preferred timezone
 const EmployeeDashboard = () => {
     const { user, logout } = useAuth();
     const [activeTab, setActiveTab] = useState('dashboard');
@@ -60,7 +61,6 @@ const EmployeeDashboard = () => {
 
 
 
-    // Download Excel report
     const downloadExcelReport = (report) => {
         try {
             // Validate report data
@@ -79,18 +79,13 @@ const EmployeeDashboard = () => {
                 ['Basic Information'],
                 ['Guard Name', report.guard?.name || 'N/A'],
                 ['Phone Number', report.guard?.phone || 'N/A'],
-                ['Report Period', `${new Date(report.reportPeriod?.startDate).toLocaleDateString()} - ${new Date(report.reportPeriod?.endDate).toLocaleDateString()}`],
+                ['Report Period', `${formatDateTimeForDisplay(report.reportPeriod?.startDate).split(' at')[0]} - ${formatDateTimeForDisplay(report.reportPeriod?.endDate).split(' at')[0]}`],
                 ['Total Days', report.reportPeriod?.totalDays || 0],
                 [],
                 ['Performance Overview'],
                 ['Overall Score', `${report.performance?.overallScore || '0'}%`],
                 ['Performance Rating', report.performance?.rating || 'N/A'],
                 ['Efficiency', report.summary?.efficiency || '0%'],
-                [],
-                ['Attendance Summary'],
-                ['Present Days', report.attendance?.presentDays || 0],
-                ['Total Days', report.attendance?.totalDays || 0],
-                ['Attendance Rate', report.attendance?.attendanceRate || '0%'],
                 [],
                 ['Rounds Performance'],
                 ['Total Scans', report.roundsPerformance?.summary?.totalScans || 0],
@@ -106,48 +101,85 @@ const EmployeeDashboard = () => {
 
             // Set column widths for summary sheet
             summarySheet['!cols'] = [
-                { wch: 25 }, // First column width
-                { wch: 20 }  // Second column width
+                { wch: 25 },
+                { wch: 20 }
             ];
 
             XLSX.utils.book_append_sheet(workbook, summarySheet, 'Summary');
 
-            // 2. Detailed Rounds Sheet (only if data exists)
+            // 2. Patrol Logs Sheet - EXACTLY as shown in your example
             if (report.detailedRounds && report.detailedRounds.length > 0) {
-                const roundsHeader = [
+                const patrolLogsHeader = [
                     'Date',
-                    'Round Number',
+                    'Round',
                     'Plan Name',
-                    'Checkpoint Name',
-                    'Checkpoint Description',
-                    'Actual Scan Time',
-                    'Status'
+                    'Checkpoint',
+                    'Actual Time',
+                    'Status',
+                    'Distance'
                 ];
 
-                const roundsData = report.detailedRounds.map(round => [
-                    new Date(round.date).toLocaleDateString(),
-                    `Round ${round.roundNumber}`,
-                    round.planName || 'N/A',
-                    round.checkpointName || 'N/A',
-                    round.checkpointDescription || 'N/A',
-                    round.actualTime ? new Date(round.actualTime).toLocaleTimeString() : 'Not Scanned',
-                    round.status ? round.status.charAt(0).toUpperCase() + round.status.slice(1) : 'Pending'
-                ]);
+                const patrolLogsData = report.detailedRounds.map(round => {
+                    // Format date as "Oct 05, 2025"
+                    const formattedDate = round.date ? moment.utc(round.date).format('MMM DD, YYYY') : 'N/A';
 
-                const roundsSheet = XLSX.utils.aoa_to_sheet([roundsHeader, ...roundsData]);
+                    // Format round as "Round 1", "Round 2", etc.
+                    const formattedRound = `Round ${round.roundNumber || 1}`;
 
-                // Set column widths for rounds sheet
-                roundsSheet['!cols'] = [
-                    { wch: 12 }, // Date
-                    { wch: 15 }, // Round Number
+                    // Format time as "01:51 AM" (12-hour format without timezone)
+                    const formattedTime = round.actualTime ?
+                        moment.utc(round.actualTime).format('hh:mm A') : 'Not Scanned';
+
+                    // Format status with proper capitalization
+                    const formattedStatus = round.status ?
+                        round.status.charAt(0).toUpperCase() + round.status.slice(1) : 'Pending';
+
+                    // Format distance as "12m"
+                    const formattedDistance = round.distanceMeters ?
+                        `${Math.round(round.distanceMeters)}m` : 'N/A';
+
+                    return [
+                        formattedDate,
+                        formattedRound,
+                        round.planName || 'N/A',
+                        round.checkpointName || 'N/A', // Single line for checkpoint name
+                        formattedTime,
+                        formattedStatus,
+                        formattedDistance
+                    ];
+                });
+
+                // Create worksheet with header and data
+                const patrolLogsSheet = XLSX.utils.aoa_to_sheet([patrolLogsHeader, ...patrolLogsData]);
+
+                // Set column widths for better readability
+                patrolLogsSheet['!cols'] = [
+                    { wch: 15 }, // Date
+                    { wch: 12 }, // Round
                     { wch: 20 }, // Plan Name
-                    { wch: 20 }, // Checkpoint Name
-                    { wch: 25 }, // Checkpoint Description
+                    { wch: 25 }, // Checkpoint
                     { wch: 15 }, // Actual Time
-                    { wch: 12 }  // Status
+                    { wch: 12 }, // Status
+                    { wch: 10 }  // Distance
                 ];
 
-                XLSX.utils.book_append_sheet(workbook, roundsSheet, 'Patrol Rounds');
+                // Add header style (bold)
+                if (!patrolLogsSheet['!rows']) patrolLogsSheet['!rows'] = [];
+                patrolLogsSheet['!rows'][0] = { hpt: 20, hpx: 20 }; // Header row height
+
+                XLSX.utils.book_append_sheet(workbook, patrolLogsSheet, 'Patrol Logs');
+            } else {
+                // Create empty patrol logs sheet with header only
+                const emptyHeader = [
+                    ['Date', 'Round', 'Plan Name', 'Checkpoint', 'Actual Time', 'Status', 'Distance'],
+                    ['No patrol logs available for this period', '', '', '', '', '', '']
+                ];
+                const emptySheet = XLSX.utils.aoa_to_sheet(emptyHeader);
+                emptySheet['!cols'] = [
+                    { wch: 15 }, { wch: 12 }, { wch: 20 },
+                    { wch: 25 }, { wch: 15 }, { wch: 12 }, { wch: 10 }
+                ];
+                XLSX.utils.book_append_sheet(workbook, emptySheet, 'Patrol Logs');
             }
 
             // 3. Performance Metrics Sheet
@@ -175,14 +207,53 @@ const EmployeeDashboard = () => {
             const fileName = `Guard_Performance_Report_${guardName}_${period}.xlsx`;
 
             XLSX.writeFile(workbook, fileName);
-            toast.success('Report downloaded successfully!');
+            toast.success('Report downloaded successfully with patrol logs!');
 
         } catch (error) {
             console.error('Error downloading report:', error);
             toast.error('Failed to download report');
         }
     };
+   // Convert local datetime to UTC for backend
+    const localToUTCDateTime = (localTimeString) => {
+        if (!localTimeString) return '';
 
+        return moment(localTimeString).utc().format();
+    };
+
+
+    // Format for display with timezone
+    const formatDateTimeForDisplay = (utcTimeString, timezone = APP_TIMEZONE) => {
+        if (!utcTimeString) return 'N/A';
+
+        return moment.utc(utcTimeString).tz(timezone).format('MMM DD, YYYY hh:mm A z');
+    };
+
+    // Format time only for display
+    const formatTimeForDisplay = (utcTimeString, timezone = APP_TIMEZONE) => {
+        if (!utcTimeString) return 'N/A';
+
+        return moment.utc(utcTimeString).tz(timezone).format('hh:mm A z');
+    };
+
+    // Add this date-only formatting function
+    const formatDateOnlyForDisplay = (utcTimeString) => {
+        if (!utcTimeString) return 'N/A';
+        return moment.utc(utcTimeString).format('MM/DD/YYYY');
+    };
+
+      const calculateShiftDuration = (startTime, endTime) => {
+            if (!startTime || !endTime) return 'N/A';
+    
+            const start = moment.utc(startTime);
+            const end = moment.utc(endTime);
+            const duration = moment.duration(end.diff(start));
+    
+            const hours = Math.floor(duration.asHours());
+            const minutes = duration.minutes();
+    
+            return `${hours}h ${minutes}m`;
+        };
     // Generate guard performance report
     const handleGenerateReport = async () => {
         if (!selectedGuard) {
@@ -214,6 +285,7 @@ const EmployeeDashboard = () => {
             setGeneratingReport(false);
         }
     };
+
 
     // Mock data generator for demonstration (remove this in production)
     const generateMockReport = () => {
@@ -268,6 +340,7 @@ const EmployeeDashboard = () => {
 
     useEffect(() => {
         fetchDashboardData();
+        fetchShifts(); // Add this line
     }, []);
 
     useEffect(() => {
@@ -730,6 +803,9 @@ const EmployeeDashboard = () => {
                     </div>
                 </div>
             </header>
+
+
+      
 
             <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
                 <div className="px-4 py-6 sm:px-0">
@@ -1310,280 +1386,320 @@ const EmployeeDashboard = () => {
                     )}
 
                     {/* GUARD REPORTS SECTION */}
-                    {activeTab === 'guard-reports' && (
-                        <div>
-                            <div className="flex justify-between items-center mb-6">
-                                <h2 className="text-2xl font-bold text-gray-900">Guard Performance Reports</h2>
-                            </div>
-
-                            {/* Report Generator */}
-                            <div className="bg-white p-6 rounded-lg shadow mb-6">
-                                <h3 className="text-lg font-medium text-gray-900 mb-4">Generate Performance Report</h3>
-                                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Select Guard</label>
-                                        <select
-                                            value={selectedGuard}
-                                            onChange={(e) => setSelectedGuard(e.target.value)}
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                                        >
-                                            <option value="">Choose a guard</option>
-                                            {guards.filter(guard => guard.isActive).map(guard => (
-                                                <option key={guard._id} value={guard._id}>
-                                                    {guard.name}
-                                                </option>
-                                            ))}
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
-                                        <input
-                                            type="date"
-                                            value={reportFilters.startDate}
-                                            onChange={(e) => setReportFilters(prev => ({ ...prev, startDate: e.target.value }))}
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">End Date</label>
-                                        <input
-                                            type="date"
-                                            value={reportFilters.endDate}
-                                            onChange={(e) => setReportFilters(prev => ({ ...prev, endDate: e.target.value }))}
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                                        />
-                                    </div>
+                          {activeTab === 'guard-reports' && (
+                                          <div>
+                                              <div className="flex justify-between items-center mb-6">
+                                                  <h2 className="text-2xl font-bold text-gray-900">Guard Performance Reports</h2>
+                                              </div>
+                  
+                                              {/* Report Generator */}
+                                              <div className="bg-white p-6 rounded-lg shadow mb-6">
+                                                  <h3 className="text-lg font-medium text-gray-900 mb-4">Generate Performance Report</h3>
+                                                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                                                      <div>
+                                                          <label className="block text-sm font-medium text-gray-700 mb-1">Select Guard</label>
+                                                          <select
+                                                              value={selectedGuard}
+                                                              onChange={(e) => setSelectedGuard(e.target.value)}
+                                                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                                                          >
+                                                              <option value="">Choose a guard</option>
+                                                              {guards.filter(guard => guard.isActive).map(guard => (
+                                                                  <option key={guard._id} value={guard._id}>
+                                                                      {guard.name}
+                                                                  </option>
+                                                              ))}
+                                                          </select>
+                                                      </div>
+                                                      <div>
+                                                          <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
+                                                          <input
+                                                              type="date"
+                                                              value={reportFilters.startDate}
+                                                              onChange={(e) => setReportFilters(prev => ({ ...prev, startDate: e.target.value }))}
+                                                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                                                          />
+                                                      </div>
+                                                      <div>
+                                                          <label className="block text-sm font-medium text-gray-700 mb-1">End Date</label>
+                                                          <input
+                                                              type="date"
+                                                              value={reportFilters.endDate}
+                                                              onChange={(e) => setReportFilters(prev => ({ ...prev, endDate: e.target.value }))}
+                                                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                                                          />
+                                                      </div>
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-1">Shift (Optional)</label>
                                         <select
                                             value={reportFilters.shiftId}
                                             onChange={(e) => setReportFilters(prev => ({ ...prev, shiftId: e.target.value }))}
                                             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                                            disabled={shifts.length === 0 && loading}
                                         >
                                             <option value="">All Shifts</option>
-                                            {shifts.map(shift => (
-                                                <option key={shift._id} value={shift._id}>
-                                                    {shift.shiftName || shift.shiftType}
-                                                </option>
-                                            ))}
+                                            {shifts.length === 0 ? (
+                                                <option value="" disabled>Loading shifts...</option>
+                                            ) : (
+                                                shifts.map(shift => (
+                                                    <option key={shift._id} value={shift._id}>
+                                                        {shift.shiftName || shift.shiftType}
+                                                    </option>
+                                                ))
+                                            )}
                                         </select>
                                     </div>
-                                </div>
-                                <div className="flex space-x-3">
-                                    <button
-                                        onClick={handleGenerateReport}
-                                        disabled={!selectedGuard || generatingReport}
-                                        className="flex items-center px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                                    >
-                                        {generatingReport ? (
-                                            <>
-                                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                                                Generating...
-                                            </>
-                                        ) : (
-                                            <>
-                                                <FileText className="w-4 h-4 mr-2" />
-                                                Generate Report
-                                            </>
-                                        )}
-                                    </button>
-                                    <button
-                                        onClick={generateMockReport}
-                                        disabled={!selectedGuard}
-                                        className="flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
-                                    >
-                                        <FileText className="w-4 h-4 mr-2" />
-                                        Generate Mock Report
-                                    </button>
-                                </div>
-                            </div>
-
-                            {/* Reports List */}
-                            <div className="space-y-6">
-                                {guardReports.length === 0 ? (
-                                    <div className="text-center py-12 bg-white rounded-lg shadow">
-                                        <FileText className="mx-auto h-16 w-16 text-gray-400" />
-                                        <h3 className="mt-4 text-lg font-medium text-gray-900">No reports generated</h3>
-                                        <p className="mt-2 text-sm text-gray-500">
-                                            Generate a performance report to see guard analytics and metrics.
-                                        </p>
-                                    </div>
-                                ) : (
-                                    guardReports.map((report, index) => (
-                                        <div key={report.id || index} className="bg-white rounded-lg shadow overflow-hidden">
-                                            {/* Report Header */}
-                                            <div className="bg-gray-50 px-6 py-4 border-b">
-                                                <div className="flex justify-between items-center">
-                                                    <div>
-                                                        <h3 className="text-lg font-medium text-gray-900">
-                                                            {report.guard?.name || 'Unknown Guard'} - Performance Report
-                                                        </h3>
-                                                        <p className="text-sm text-gray-500">
-                                                            Period: {new Date(report.reportPeriod?.startDate).toLocaleDateString()} - {new Date(report.reportPeriod?.endDate).toLocaleDateString()}
-                                                            {report.reportPeriod?.totalDays && (
-                                                                <span className="ml-2">({report.reportPeriod.totalDays} days)</span>
-                                                            )}
-                                                        </p>
-                                                        <p className="text-sm text-gray-500">
-                                                            Phone: {report.guard?.phone}
-                                                        </p>
-                                                        {report.generatedAt && (
-                                                            <p className="text-xs text-gray-400">
-                                                                Generated: {new Date(report.generatedAt).toLocaleString()}
-                                                            </p>
-                                                        )}
-                                                    </div>
-                                                    <div className="flex items-center space-x-3">
-                                                        <div className="text-right">
-                                                            <div className={`text-2xl font-bold ${parseFloat(report.performance?.overallScore || '0') >= 80 ? 'text-green-600' :
-                                                                parseFloat(report.performance?.overallScore || '0') >= 60 ? 'text-yellow-600' :
-                                                                    'text-red-600'
-                                                                }`}>
-                                                                {report.performance?.overallScore || '0'}%
-                                                            </div>
-                                                            <div className="text-xs text-gray-500">
-                                                                {report.performance?.rating || 'Overall Score'}
-                                                            </div>
-                                                        </div>
-                                                        <button
-                                                            onClick={() => downloadExcelReport(report)}
-                                                            className="flex items-center px-3 py-2 text-sm text-white bg-green-600 border border-green-700 rounded-md hover:bg-green-700"
-                                                        >
-                                                            <Download className="w-4 h-4 mr-1" />
-                                                            Excel
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            {/* Performance Summary */}
-                                            <div className="px-6 py-4 border-b bg-indigo-50">
-                                                <h4 className="text-md font-medium text-gray-900 mb-3">Performance Summary</h4>
-                                                <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                                                    {/* <div className="text-center">
-                                                        <div className={`text-lg font-bold ${parseFloat(report.performance?.breakdown?.attendanceScore) >= 80 ? 'text-green-600' :
-                                                            parseFloat(report.performance?.breakdown?.attendanceScore) >= 60 ? 'text-yellow-600' :
-                                                                'text-red-600'
-                                                            }`}>
-                                                            {report.performance?.breakdown?.attendanceScore || '0'}%
-                                                        </div>
-                                                        <div className="text-sm text-gray-600">Attendance</div>
-                                                    </div> */}
-                                                    {/* <div className="text-center">
-                                                        <div className={`text-lg font-bold ${parseFloat(report.performance?.breakdown?.roundsScore) >= 80 ? 'text-green-600' :
-                                                            parseFloat(report.performance?.breakdown?.roundsScore) >= 60 ? 'text-yellow-600' :
-                                                                'text-red-600'
-                                                            }`}>
-                                                            {report.performance?.breakdown?.roundsScore || '0'}%
-                                                        </div>
-                                                        <div className="text-sm text-gray-600">Rounds</div>
-                                                    </div> */}
-                                                    {/* <div className="text-center">
-                                                        <div className="text-lg font-bold text-blue-600">
-                                                            {report.attendance?.presentDays || 0}/{report.attendance?.totalDays || 0}
-                                                        </div>
-                                                        <div className="text-sm text-gray-600">Present/Total</div>
-                                                    </div> */}
-                                                    <div className="text-center">
-                                                        <div className="text-lg font-bold text-purple-600">
-                                                            {report.roundsPerformance?.summary?.completedScans || 0}/{report.roundsPerformance?.summary?.totalScans || 0}
-                                                        </div>
-                                                        <div className="text-sm text-gray-600">Scans Done</div>
-                                                    </div>
-                                                    <div className="text-center">
-                                                        <div className="text-lg font-bold text-indigo-600">
-                                                            {report.summary?.efficiency || '0%'}
-                                                        </div>
-                                                        <div className="text-sm text-gray-600">Efficiency</div>
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            {/* Detailed Rounds Performance Table */}
-                                            <div className="p-6">
-                                                <div className="flex justify-between items-center mb-4">
-                                                    <h4 className="text-md font-medium text-gray-900">Detailed Patrol Rounds</h4>
-                                                    <div className="text-sm text-gray-500">
-                                                        Total Records: {report.detailedRounds?.length || 0}
-                                                    </div>
-                                                </div>
-
-                                                {report.detailedRounds && report.detailedRounds.length > 0 ? (
-                                                    <div className="overflow-x-auto">
-                                                        <table className="min-w-full divide-y divide-gray-200">
-                                                            <thead className="bg-gray-50">
-                                                                <tr>
-                                                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                                        Date
-                                                                    </th>
-                                                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                                        Round
-                                                                    </th>
-                                                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                                        Plan Name
-                                                                    </th>
-                                                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                                        Checkpoint
-                                                                    </th>
-                                                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                                        Actual Time
-                                                                    </th>
-                                                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                                        Status
-                                                                    </th>
-                                                                </tr>
-                                                            </thead>
-                                                            <tbody className="bg-white divide-y divide-gray-200">
-                                                                {report.detailedRounds.map((round, idx) => (
-                                                                    <tr key={idx} className="hover:bg-gray-50">
-                                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                                                                            {new Date(round.date).toLocaleDateString()}
-                                                                        </td>
-                                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                                                                            Round {round.roundNumber}
-                                                                        </td>
-                                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 font-medium">
-                                                                            {round.planName || 'N/A'}
-                                                                        </td>
-                                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                                                                            <div>
-                                                                                <div className="font-medium">{round.checkpointName}</div>
-                                                                                {round.checkpointDescription && (
-                                                                                    <div className="text-xs text-gray-400">{round.checkpointDescription}</div>
-                                                                                )}
-                                                                            </div>
-                                                                        </td>
-                                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                                                                            {round.actualTime ? new Date(round.actualTime).toLocaleTimeString() : 'Not Scanned'}
-                                                                        </td>
-                                                                        <td className="px-4 py-3 whitespace-nowrap">
-                                                                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${round.status === 'completed' ? 'bg-green-100 text-green-800' :
-                                                                                round.status === 'missed' ? 'bg-red-100 text-red-800' :
-                                                                                    round.status === 'delayed' ? 'bg-yellow-100 text-yellow-800' :
-                                                                                        'bg-gray-100 text-gray-800'
-                                                                                }`}>
-                                                                                {round.status ? round.status.charAt(0).toUpperCase() + round.status.slice(1) : 'Pending'}
-                                                                            </span>
-                                                                        </td>
-                                                                    </tr>
-                                                                ))}
-                                                            </tbody>
-                                                        </table>
-                                                    </div>
-                                                ) : (
-                                                    <div className="text-center py-8 bg-gray-50 rounded-lg">
-                                                        <Target className="mx-auto h-8 w-8 text-gray-400" />
-                                                        <p className="mt-2 text-sm text-gray-500">No patrol rounds data available for this period</p>
-                                                        <p className="text-xs text-gray-400">The guard may not have any assigned patrol plans or scans</p>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-                                    ))
-                                )}
-                            </div>
-                        </div>
-                    )}
+                                                  </div>
+                                                  <button
+                                                      onClick={handleGenerateReport}
+                                                      disabled={!selectedGuard || generatingReport}
+                                                      className="flex items-center px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                  >
+                                                      {generatingReport ? (
+                                                          <>
+                                                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                                              Generating...
+                                                          </>
+                                                      ) : (
+                                                          <>
+                                                              <FileText className="w-4 h-4 mr-2" />
+                                                              Generate Report
+                                                          </>
+                                                      )}
+                                                  </button>
+                                              </div>
+                  
+                                              {/* Reports List */}
+                                              <div className="space-y-6">
+                                                  {guardReports.length === 0 ? (
+                                                      <div className="text-center py-12 bg-white rounded-lg shadow">
+                                                          <FileText className="mx-auto h-16 w-16 text-gray-400" />
+                                                          <h3 className="mt-4 text-lg font-medium text-gray-900">No reports generated</h3>
+                                                          <p className="mt-2 text-sm text-gray-500">
+                                                              Generate a performance report to see guard analytics and metrics.
+                                                          </p>
+                                                      </div>
+                                                  ) : (
+                                                      guardReports.map((report, index) => (
+                                                          <div key={index} className="bg-white rounded-lg shadow overflow-hidden">
+                                                              {/* Report Header */}
+                                                              <div className="bg-gray-50 px-6 py-4 border-b">
+                                                                  <div className="flex justify-between items-center">
+                                                                      <div>
+                                                                          <h3 className="text-lg font-medium text-gray-900">
+                                                                              {report.guard?.name || 'Unknown Guard'} - Performance Report
+                                                                          </h3>
+                                                                          <p className="text-sm text-gray-500">
+                                                                              Period: {formatDateTimeForDisplay(report.reportPeriod?.startDate).split(',')[0]} - {formatDateTimeForDisplay(report.reportPeriod?.endDate).split(',')[0]}
+                                                                              {report.reportPeriod?.totalDays && (
+                                                                                  <span className="ml-2">({report.reportPeriod.totalDays} days)</span>
+                                                                              )}
+                                                                          </p>
+                                                                          <p className="text-sm text-gray-500">
+                                                                              Phone: {report.guard?.phone}
+                                                                          </p>
+                                                                      </div>
+                                                                      <div className="flex items-center space-x-3">
+                                                                          <div className="text-right">
+                                                                              <div className={`text-2xl font-bold ${parseFloat(report.performance?.overallScore || '0') >= 80 ? 'text-green-600' :
+                                                                                  parseFloat(report.performance?.overallScore || '0') >= 60 ? 'text-yellow-600' :
+                                                                                      'text-red-600'
+                                                                                  }`}>
+                                                                                  {report.performance?.overallScore || '0'}%
+                                                                              </div>
+                                                                              <div className="text-xs text-gray-500">
+                                                                                  {report.performance?.rating || 'Overall Score'}
+                                                                              </div>
+                                                                          </div>
+                                                                          <button
+                                                                              onClick={() => downloadExcelReport(report)}
+                                                                              className="flex items-center px-3 py-2 text-sm text-white bg-green-600 border border-green-700 rounded-md hover:bg-green-700"
+                                                                          >
+                                                                              <Download className="w-4 h-4 mr-1" />
+                                                                              Excel
+                                                                          </button>
+                                                                      </div>
+                                                                  </div>
+                                                              </div>
+                  
+                                                              {/* Performance Summary */}
+                                                              <div className="px-6 py-4 border-b bg-indigo-50">
+                                                                  <h4 className="text-md font-medium text-gray-900 mb-3">Performance Summary</h4>
+                                                                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                                                      <div className="text-center">
+                                                                          <div className="text-lg font-bold text-blue-600">
+                                                                              {report.roundsPerformance?.summary?.totalCompletedRounds || 0}/{report.roundsPerformance?.summary?.totalExpectedRounds || 0}
+                                                                          </div>
+                                                                          <div className="text-sm text-gray-600">Rounds Completed</div>
+                                                                      </div>
+                                                                      <div className="text-center">
+                                                                          <div className="text-lg font-bold text-purple-600">
+                                                                              {report.roundsPerformance?.summary?.totalCompletedScans || 0}/{report.roundsPerformance?.summary?.totalExpectedScans || 0}
+                                                                          </div>
+                                                                          <div className="text-sm text-gray-600">Scans Completed</div>
+                                                                      </div>
+                                                                      <div className="text-center">
+                                                                          <div className={`text-lg font-bold ${parseFloat(report.roundsPerformance?.summary?.roundsCompletionRate) >= 80 ? 'text-green-600' :
+                                                                              parseFloat(report.roundsPerformance?.summary?.roundsCompletionRate) >= 60 ? 'text-yellow-600' :
+                                                                                  'text-red-600'
+                                                                              }`}>
+                                                                              {report.roundsPerformance?.summary?.roundsCompletionRate || '0%'}
+                                                                          </div>
+                                                                          <div className="text-sm text-gray-600">Rounds Completion</div>
+                                                                      </div>
+                                                                      <div className="text-center">
+                                                                          <div className="text-lg font-bold text-indigo-600">
+                                                                              {report.summary?.efficiency || '0%'}
+                                                                          </div>
+                                                                          <div className="text-sm text-gray-600">Overall Efficiency</div>
+                                                                      </div>
+                                                                  </div>
+                                                              </div>
+                  
+                                                              {/* Plan Breakdown */}
+                                                              {report.roundsPerformance?.planBreakdown && report.roundsPerformance.planBreakdown.length > 0 && (
+                                                                  <div className="px-6 py-4 border-b bg-white">
+                                                                      <h4 className="text-md font-medium text-gray-900 mb-3">Plan Breakdown</h4>
+                                                                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                                                          {report.roundsPerformance.planBreakdown.map((plan, idx) => (
+                                                                              <div key={idx} className="bg-white border border-gray-200 rounded-lg p-4">
+                                                                                  <h5 className="font-medium text-gray-900 mb-2">{plan.planName}</h5>
+                                                                                  <div className="space-y-2 text-sm">
+                                                                                      <div className="flex justify-between">
+                                                                                          <span className="text-gray-600">Rounds:</span>
+                                                                                          <span className="font-medium">{plan.completedRounds}/{plan.totalRounds}</span>
+                                                                                      </div>
+                                                                                      <div className="flex justify-between">
+                                                                                          <span className="text-gray-600">Scans:</span>
+                                                                                          <span className="font-medium">{plan.completedScans}/{plan.totalRounds * plan.totalCheckpoints}</span>
+                                                                                      </div>
+                                                                                      <div className="flex justify-between">
+                                                                                          <span className="text-gray-600">Completion:</span>
+                                                                                          <span className={`font-medium ${parseFloat(plan.completionRate) >= 80 ? 'text-green-600' :
+                                                                                              parseFloat(plan.completionRate) >= 60 ? 'text-yellow-600' :
+                                                                                                  'text-red-600'
+                                                                                              }`}>
+                                                                                              {plan.completionRate}
+                                                                                          </span>
+                                                                                      </div>
+                                                                                  </div>
+                                                                              </div>
+                                                                          ))}
+                                                                      </div>
+                                                                  </div>
+                                                              )}
+                  
+                                                              {/* Progress Summary */}
+                                                              <div className="px-6 py-4 border-b bg-green-50">
+                                                                  <div className="flex items-center justify-between">
+                                                                      <div>
+                                                                          <h4 className="text-md font-medium text-gray-900">Progress Summary</h4>
+                                                                          <p className="text-sm text-gray-600 mt-1">{report.summary?.progress}</p>
+                                                                      </div>
+                                                                      <div className="text-right">
+                                                                          <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${report.summary?.status === 'Good' ? 'bg-green-100 text-green-800' :
+                                                                              report.summary?.status === 'Needs Improvement' ? 'bg-yellow-100 text-yellow-800' :
+                                                                                  'bg-red-100 text-red-800'
+                                                                              }`}>
+                                                                              {report.summary?.status}
+                                                                          </span>
+                                                                      </div>
+                                                                  </div>
+                                                              </div>
+                  
+                                                              {/* Detailed Rounds Performance Table */}
+                                                              <div className="p-6">
+                                                                  <div className="flex justify-between items-center mb-4">
+                                                                      <h4 className="text-md font-medium text-gray-900">Detailed Patrol Rounds</h4>
+                                                                      <div className="text-sm text-gray-500">
+                                                                          Total Records: {report.detailedRounds?.length || 0}
+                                                                      </div>
+                                                                  </div>
+                  
+                                                                  {report.detailedRounds && report.detailedRounds.length > 0 ? (
+                                                                      <div className="overflow-x-auto">
+                                                                          <table className="min-w-full divide-y divide-gray-200">
+                                                                              <thead className="bg-gray-50">
+                                                                                  <tr>
+                                                                                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                                                          Date
+                                                                                      </th>
+                                                                                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                                                          Round
+                                                                                      </th>
+                                                                                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                                                          Plan Name
+                                                                                      </th>
+                                                                                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                                                          Checkpoint
+                                                                                      </th>
+                                                                                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                                                          Actual Time
+                                                                                      </th>
+                                                                                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                                                          Status
+                                                                                      </th>
+                                                                                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                                                          Distance
+                                                                                      </th>
+                                                                                  </tr>
+                                                                              </thead>
+                                                                              <tbody className="bg-white divide-y divide-gray-200">
+                                                                                  {report.detailedRounds.map((round, idx) => (
+                                                                                      <tr key={idx} className="hover:bg-gray-50">
+                                                                                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                                                                                              {formatDateTimeForDisplay(round.date).split(' ').slice(0, 3).join(' ')}
+                                                                                          </td>
+                                                                                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                                                                                              Round {round.roundNumber}
+                                                                                          </td>
+                                                                                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 font-medium">
+                                                                                              {round.planName || 'N/A'}
+                                                                                          </td>
+                                                                                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                                                                                              <div>
+                                                                                                  <div className="font-medium">{round.checkpointName}</div>
+                                                                                                  {round.checkpointDescription && (
+                                                                                                      <div className="text-xs text-gray-400">{round.checkpointDescription}</div>
+                                                                                                  )}
+                                                                                              </div>
+                                                                                          </td>
+                                                                                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                                                                                              {round.actualTime ? formatTimeForDisplay(round.actualTime).split(' ').slice(0, 2).join(' ') : 'Not Scanned'}
+                                                                                          </td>
+                                                                                          <td className="px-4 py-3 whitespace-nowrap">
+                                                                                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${round.status === 'completed' ? 'bg-green-100 text-green-800' :
+                                                                                                  round.status === 'missed' ? 'bg-red-100 text-red-800' :
+                                                                                                      'bg-gray-100 text-gray-800'
+                                                                                                  }`}>
+                                                                                                  {round.status ? round.status.charAt(0).toUpperCase() + round.status.slice(1) : 'Pending'}
+                                                                                              </span>
+                                                                                          </td>
+                                                                                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                                                                                              {round.distanceMeters ? `${round.distanceMeters}m` : 'N/A'}
+                                                                                          </td>
+                                                                                      </tr>
+                                                                                  ))}
+                                                                              </tbody>
+                                                                          </table>
+                                                                      </div>
+                                                                  ) : (
+                                                                      <div className="text-center py-8 bg-gray-50 rounded-lg">
+                                                                          <Target className="mx-auto h-8 w-8 text-gray-400" />
+                                                                          <p className="mt-2 text-sm text-gray-500">No patrol rounds data available for this period</p>
+                                                                          <p className="text-xs text-gray-400">The guard may not have any assigned patrol plans or scans</p>
+                                                                      </div>
+                                                                  )}
+                                                              </div>
+                                                          </div>
+                                                      ))
+                                                  )}
+                                              </div>
+                                          </div>
+                                      )}
+                  
+                  
+                  
 
                     {/* CREATE/EDIT MODAL */}
                     {showModal && (

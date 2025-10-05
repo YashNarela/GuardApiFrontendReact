@@ -7,8 +7,9 @@ import {
 import axios from '../services/axiosConfig';
 import toast from 'react-hot-toast';
 import { useForm } from 'react-hook-form';
-
+import { useNavigate } from 'react-router-dom';
 const GuardDashboard = () => {
+    const navigate = useNavigate();
     const { user, logout } = useAuth();
     const [activeTab, setActiveTab] = useState('dashboard');
     const [dashboardData, setDashboardData] = useState(null);
@@ -36,28 +37,9 @@ const GuardDashboard = () => {
 const handleLogout = async () => {
   try {
     setLoading(true);
-    const token = localStorage.getItem('token');
+   
     
-    // if (token) {
-    //   try {
-    //     await axios.post(
-    //       'http://localhost:2042/api/auth/logout', 
-    //       {}, 
-    //       {
-    //         headers: { 
-    //           'Authorization': `Bearer ${token}`,
-    //           'Content-Type': 'application/json'
-    //         },
-    //         timeout: 5000 // 5 second timeout
-    //       }
-    //     );
-    //   } catch (apiError) {
-    //     console.warn('Logout API call failed, but continuing with local logout:', apiError);
-    //     // Continue with local logout even if API call fails
-    //   }
-    // }
-    
-    // Clear all local storage items related to auth
+      
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     
@@ -65,7 +47,7 @@ const handleLogout = async () => {
     
     // Use setTimeout to ensure toast is visible before redirect
     setTimeout(() => {
-      window.location.href = '/login';
+        window.location.replace('/login');
     }, 1000);
     
   } catch (error) {
@@ -75,7 +57,7 @@ const handleLogout = async () => {
     // Force redirect even on error
     localStorage.removeItem('token');
     localStorage.removeItem('user');
-    window.location.href = '/login';
+      window.location.replace('/login');
   } finally {
     setLoading(false);
   }
