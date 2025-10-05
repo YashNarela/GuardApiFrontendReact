@@ -757,7 +757,7 @@ const handleLogout = async () => {
                         <form onSubmit={handleSubmit(reportIncident)} className="space-y-4">
 
                             {/* Title */}
-                            <div>
+                            {/* <div>
                                 <label className="block text-sm font-medium text-gray-700">Title</label>
                                 <input
                                     {...register('title', { required: 'Title is required' })}
@@ -766,10 +766,10 @@ const handleLogout = async () => {
                            focus:outline-none focus:ring-red-500 focus:border-red-500"
                                 />
                                 {errors.title && <p className="mt-1 text-sm text-red-600">{errors.title.message}</p>}
-                            </div>
+                            </div> */}
 
                             {/* Description */}
-                            <div>
+                            {/* <div>
                                 <label className="block text-sm font-medium text-gray-700">Description</label>
                                 <textarea
                                     {...register('description', { required: 'Description is required' })}
@@ -778,10 +778,10 @@ const handleLogout = async () => {
                            focus:outline-none focus:ring-red-500 focus:border-red-500"
                                 />
                                 {errors.description && <p className="mt-1 text-sm text-red-600">{errors.description.message}</p>}
-                            </div>
+                            </div> */}
 
                             {/* Type */}
-                            <div>
+                            {/* <div>
                                 <label className="block text-sm font-medium text-gray-700">Type</label>
                                 <select
                                     {...register('type', { required: 'Type is required' })}
@@ -799,10 +799,10 @@ const handleLogout = async () => {
                                     <option value="other">Other</option>
                                 </select>
                                 {errors.type && <p className="mt-1 text-sm text-red-600">{errors.type.message}</p>}
-                            </div>
+                            </div> */}
 
                             {/* Severity */}
-                            <div>
+                            {/* <div>
                                 <label className="block text-sm font-medium text-gray-700">Severity</label>
                                 <select
                                     {...register('severity')}
@@ -814,7 +814,7 @@ const handleLogout = async () => {
                                     <option value="high">High</option>
                                     <option value="critical">Critical</option>
                                 </select>
-                            </div>
+                            </div> */}
 
                             {/* Photos */}
                             <div>

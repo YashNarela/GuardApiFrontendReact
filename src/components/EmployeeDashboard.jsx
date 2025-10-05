@@ -44,6 +44,19 @@ const EmployeeDashboard = () => {
     });
     const [generatingReport, setGeneratingReport] = useState(false);
 
+
+    const [expandedSupervisors, setExpandedSupervisors] = useState(new Set());
+
+    const toggleSupervisorExpansion = (supervisorId) => {
+        const newExpanded = new Set(expandedSupervisors);
+        if (newExpanded.has(supervisorId)) {
+            newExpanded.delete(supervisorId);
+        } else {
+            newExpanded.add(supervisorId);
+        }
+        setExpandedSupervisors(newExpanded);
+    };
+
     // Get performance rating
     const getPerformanceRating = (score) => {
         const numericScore = parseFloat(score) || 0;
@@ -60,7 +73,6 @@ const EmployeeDashboard = () => {
     };
 
 
-
     const downloadExcelReport = (report) => {
         try {
             // Validate report data
@@ -69,10 +81,30 @@ const EmployeeDashboard = () => {
                 return;
             }
 
+            // Extract data with proper fallbacks
+            const roundsPerformance = report.roundsPerformance || {};
+            const summary = roundsPerformance.summary || {};
+            const performance = report.performance || {};
+            const performanceBreakdown = performance.breakdown || {};
+
+            // Calculate actual values from detailed rounds if summary is missing
+            const detailedRounds = report.detailedRounds || [];
+            const totalScans = summary.totalScans || detailedRounds.length;
+            const completedScans = summary.completedScans ||
+                detailedRounds.filter(round => round.status === 'completed').length;
+            const scanCompletionRate = summary.scanCompletionRate ||
+                (totalScans > 0 ? ((completedScans / totalScans) * 100).toFixed(1) + '%' : '0%');
+
+            // Calculate rounds data
+            const totalRounds = summary.totalExpectedRounds || 0;
+            const completedRounds = summary.totalCompletedRounds || 0;
+            const roundsCompletionRate = summary.roundsCompletionRate ||
+                (totalRounds > 0 ? ((completedRounds / totalRounds) * 100).toFixed(1) + '%' : '0%');
+
             // Create workbook
             const workbook = XLSX.utils.book_new();
 
-            // 1. Summary Sheet
+            // 1. Summary Sheet - FIXED DATA
             const summaryData = [
                 ['GUARD PERFORMANCE REPORT'],
                 [],
@@ -83,14 +115,17 @@ const EmployeeDashboard = () => {
                 ['Total Days', report.reportPeriod?.totalDays || 0],
                 [],
                 ['Performance Overview'],
-                ['Overall Score', `${report.performance?.overallScore || '0'}%`],
-                ['Performance Rating', report.performance?.rating || 'N/A'],
-                ['Efficiency', report.summary?.efficiency || '0%'],
+                ['Overall Score', `${performance.overallScore || '0'}%`],
+                ['Performance Rating', performance.rating || 'N/A'],
+                ['Efficiency', report.summary?.efficiency || roundsCompletionRate || '0%'],
                 [],
                 ['Rounds Performance'],
-                ['Total Scans', report.roundsPerformance?.summary?.totalScans || 0],
-                ['Completed Scans', report.roundsPerformance?.summary?.completedScans || 0],
-                ['Scan Completion Rate', `${((report.roundsPerformance?.summary?.completedScans || 0) / (report.roundsPerformance?.summary?.totalScans || 1) * 100).toFixed(1)}%`],
+                ['Total Rounds', totalRounds],
+                ['Completed Rounds', completedRounds],
+                ['Rounds Completion Rate', roundsCompletionRate],
+                // ['Total Scans', totalScans],
+                ['Completed Scans', completedScans],
+                ['Scan Completion Rate', scanCompletionRate],
             ];
 
             const summarySheet = XLSX.utils.aoa_to_sheet(summaryData);
@@ -107,8 +142,8 @@ const EmployeeDashboard = () => {
 
             XLSX.utils.book_append_sheet(workbook, summarySheet, 'Summary');
 
-            // 2. Patrol Logs Sheet - EXACTLY as shown in your example
-            if (report.detailedRounds && report.detailedRounds.length > 0) {
+            // 2. Patrol Logs Sheet
+            if (detailedRounds.length > 0) {
                 const patrolLogsHeader = [
                     'Date',
                     'Round',
@@ -119,7 +154,7 @@ const EmployeeDashboard = () => {
                     'Distance'
                 ];
 
-                const patrolLogsData = report.detailedRounds.map(round => {
+                const patrolLogsData = detailedRounds.map(round => {
                     // Format date as "Oct 05, 2025"
                     const formattedDate = round.date ? moment.utc(round.date).format('MMM DD, YYYY') : 'N/A';
 
@@ -142,17 +177,15 @@ const EmployeeDashboard = () => {
                         formattedDate,
                         formattedRound,
                         round.planName || 'N/A',
-                        round.checkpointName || 'N/A', // Single line for checkpoint name
+                        round.checkpointName || 'N/A',
                         formattedTime,
                         formattedStatus,
                         formattedDistance
                     ];
                 });
 
-                // Create worksheet with header and data
                 const patrolLogsSheet = XLSX.utils.aoa_to_sheet([patrolLogsHeader, ...patrolLogsData]);
 
-                // Set column widths for better readability
                 patrolLogsSheet['!cols'] = [
                     { wch: 15 }, // Date
                     { wch: 12 }, // Round
@@ -163,13 +196,8 @@ const EmployeeDashboard = () => {
                     { wch: 10 }  // Distance
                 ];
 
-                // Add header style (bold)
-                if (!patrolLogsSheet['!rows']) patrolLogsSheet['!rows'] = [];
-                patrolLogsSheet['!rows'][0] = { hpt: 20, hpx: 20 }; // Header row height
-
                 XLSX.utils.book_append_sheet(workbook, patrolLogsSheet, 'Patrol Logs');
             } else {
-                // Create empty patrol logs sheet with header only
                 const emptyHeader = [
                     ['Date', 'Round', 'Plan Name', 'Checkpoint', 'Actual Time', 'Status', 'Distance'],
                     ['No patrol logs available for this period', '', '', '', '', '', '']
@@ -182,15 +210,16 @@ const EmployeeDashboard = () => {
                 XLSX.utils.book_append_sheet(workbook, emptySheet, 'Patrol Logs');
             }
 
-            // 3. Performance Metrics Sheet
+            // 3. Performance Metrics Sheet - FIXED DATA
             const metricsData = [
                 ['PERFORMANCE METRICS'],
                 [],
                 ['Category', 'Score', 'Rating'],
-                ['Overall Performance', `${report.performance?.overallScore || '0'}%`, report.performance?.rating || 'N/A'],
-                ['Attendance', `${report.performance?.breakdown?.attendanceScore || '0'}%`, getPerformanceRating(report.performance?.breakdown?.attendanceScore)],
-                ['Rounds Completion', `${report.performance?.breakdown?.roundsScore || '0'}%`, getPerformanceRating(report.performance?.breakdown?.roundsScore)],
-                ['Efficiency', report.summary?.efficiency || '0%', getPerformanceRating(parseInt(report.summary?.efficiency))],
+                ['Overall Performance', `${performance.overallScore || '0'}%`, performance.rating || 'N/A'],
+                // ['Attendance', `${performanceBreakdown.attendanceScore || '0'}%`, getPerformanceRating(performanceBreakdown.attendanceScore)],
+                ['Rounds Completion', `${performanceBreakdown.roundsScore || roundsCompletionRate.replace('%', '')}%`, getPerformanceRating(performanceBreakdown.roundsScore || roundsCompletionRate.replace('%', ''))],
+                ['Scan Completion', `${scanCompletionRate}`, getPerformanceRating(scanCompletionRate.replace('%', ''))],
+                ['Efficiency', report.summary?.efficiency || roundsCompletionRate || '0%', getPerformanceRating(parseInt(report.summary?.efficiency || roundsCompletionRate.replace('%', '')))],
             ];
 
             const metricsSheet = XLSX.utils.aoa_to_sheet(metricsData);
@@ -207,13 +236,14 @@ const EmployeeDashboard = () => {
             const fileName = `Guard_Performance_Report_${guardName}_${period}.xlsx`;
 
             XLSX.writeFile(workbook, fileName);
-            toast.success('Report downloaded successfully with patrol logs!');
+            toast.success('Report downloaded successfully!');
 
         } catch (error) {
             console.error('Error downloading report:', error);
             toast.error('Failed to download report');
         }
     };
+
    // Convert local datetime to UTC for backend
     const localToUTCDateTime = (localTimeString) => {
         if (!localTimeString) return '';
@@ -790,7 +820,7 @@ const EmployeeDashboard = () => {
                 <div className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
                     <div className="flex justify-between items-center">
                         <div>
-                            <h1 className="text-3xl font-bold text-gray-900">Employee Dashboard</h1>
+                            <h1 className="text-3xl font-bold text-gray-900">Company Dashboard</h1>
                             <p className="mt-1 text-sm text-gray-600">Welcome, {user?.name}</p>
                         </div>
                         <button
@@ -912,19 +942,29 @@ const EmployeeDashboard = () => {
                                                         {/* Guards Preview */}
                                                         {supervisor.guards && supervisor.guards.length > 0 && (
                                                             <div className="mt-3">
-                                                                <p className="text-xs text-gray-500 mb-1">Assigned Guards:</p>
-                                                                <div className="flex flex-wrap gap-1">
-                                                                    {supervisor.guards.slice(0, 3).map((guard) => (
-                                                                        <span
-                                                                            key={guard._id}
-                                                                            className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-blue-100 text-blue-800"
-                                                                        >
-                                                                            <Shield className="w-3 h-3 mr-1" />
-                                                                            {guard.name}
-                                                                        </span>
-                                                                    ))}
-                                                                    {supervisor.guards.length > 3 && (
-                                                                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-gray-100 text-gray-600">
+                                                                <div className="flex items-center justify-between mb-1">
+                                                                    <p className="text-xs text-gray-500">Assigned Guards:</p>
+                                                                    <button
+                                                                        onClick={() => toggleSupervisorExpansion(supervisor._id)}
+                                                                        className="text-xs text-indigo-600 hover:text-indigo-800"
+                                                                    >
+                                                                        {expandedSupervisors.has(supervisor._id) ? 'Show Less' : `Show All (${supervisor.guards.length})`}
+                                                                    </button>
+                                                                </div>
+                                                                <div className="flex flex-wrap gap-2">
+                                                                    {supervisor.guards
+                                                                        .slice(0, expandedSupervisors.has(supervisor._id) ? supervisor.guards.length : 3)
+                                                                        .map((guard) => (
+                                                                            <span
+                                                                                key={guard._id}
+                                                                                className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800 border border-blue-200"
+                                                                            >
+                                                                                <Shield className="w-3 h-3 mr-2" />
+                                                                                {guard.name}
+                                                                            </span>
+                                                                        ))}
+                                                                    {!expandedSupervisors.has(supervisor._id) && supervisor.guards.length > 3 && (
+                                                                        <span className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-gray-100 text-gray-600">
                                                                             +{supervisor.guards.length - 3} more
                                                                         </span>
                                                                     )}
@@ -1131,6 +1171,8 @@ const EmployeeDashboard = () => {
                     )}
 
                     {/* PATROL PLANS */}
+                    {/* PATROL PLANS */}
+                    {/* PATROL PLANS */}
                     {activeTab === 'plans' && (
                         <div>
                             <div className="flex justify-between items-center mb-6">
@@ -1139,143 +1181,133 @@ const EmployeeDashboard = () => {
                                     Total: {patrolPlans.length} plan{patrolPlans.length !== 1 ? 's' : ''}
                                 </div>
                             </div>
+
                             {loading ? (
-                                <div className="text-center py-8">Loading...</div>
+                                <div className="text-center py-8">Loading patrol plans...</div>
                             ) : (
-                                <div className="space-y-6">
-                                    {patrolPlans.map((plan) => (
-                                        <div key={plan._id} className="bg-white shadow overflow-hidden sm:rounded-lg">
-                                            <div className="px-6 py-4 border-b border-gray-200">
-                                                <div className="flex justify-between items-start">
-                                                    <div>
-                                                        <h3 className="text-xl font-bold text-gray-900">{plan.planName}</h3>
-                                                        <p className="text-sm text-gray-600 mt-1">{plan.description}</p>
-                                                    </div>
-                                                    <div className="flex items-center space-x-2">
-                                                        <span className={`px-3 py-1 rounded-full text-sm font-medium ${plan.isActive
-                                                            ? 'bg-green-100 text-green-800'
-                                                            : 'bg-gray-100 text-gray-800'
-                                                            }`}>
-                                                            {plan.isActive ? 'Active' : 'Inactive'}
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            <div className="px-6 py-4">
-                                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                                                    <div>
-                                                        <h4 className="text-sm font-medium text-gray-500">Frequency</h4>
-                                                        <p className="text-sm text-gray-900 capitalize">{plan.frequency}</p>
-                                                    </div>
-                                                    <div>
-                                                        <h4 className="text-sm font-medium text-gray-500">Rounds</h4>
-                                                        <p className="text-sm text-gray-900">{plan.rounds}</p>
-                                                    </div>
-                                                    <div>
-                                                        <h4 className="text-sm font-medium text-gray-500">Start Date</h4>
-                                                        <p className="text-sm text-gray-900">
-                                                            {new Date(plan.startDate).toLocaleDateString()} at {new Date(plan.startDate).toLocaleTimeString()}
-                                                        </p>
-                                                    </div>
-                                                    <div>
-                                                        <h4 className="text-sm font-medium text-gray-500">End Date</h4>
-                                                        <p className="text-sm text-gray-900">
-                                                            {new Date(plan.endDate).toLocaleDateString()} at {new Date(plan.endDate).toLocaleTimeString()}
-                                                        </p>
-                                                    </div>
-                                                </div>
-
-                                                {plan.frequency === 'custom' && plan.customFrequency?.days && plan.customFrequency.days.length > 0 && (
-                                                    <div className="mb-6">
-                                                        <h4 className="text-sm font-medium text-gray-500 mb-2">Custom Days</h4>
-                                                        <div className="flex flex-wrap gap-2">
-                                                            {plan.customFrequency.days.map((day, index) => (
-                                                                <span key={index} className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-xs">
-                                                                    {day}
-                                                                </span>
-                                                            ))}
-                                                        </div>
-                                                    </div>
-                                                )}
-
-                                                <div className="mb-6">
-                                                    <h4 className="text-sm font-medium text-gray-500 mb-3">Assigned Guards</h4>
-                                                    {plan.assignedGuards && plan.assignedGuards.length > 0 ? (
-                                                        <div className="flex flex-wrap gap-2">
-                                                            {plan.assignedGuards.map((assignment, index) => (
-                                                                <div key={index} className="flex items-center space-x-2 bg-gray-50 px-3 py-2 rounded-lg">
-                                                                    <Shield className="w-4 h-4 text-gray-500" />
-                                                                    <span className="text-sm text-gray-900">
-                                                                        {assignment.guardId?.name || 'Unknown Guard'}
-                                                                    </span>
-                                                                    {assignment.guardId?.phone && (
-                                                                        <span className="text-xs text-gray-500">
-                                                                            ({assignment.guardId.phone})
-                                                                        </span>
-                                                                    )}
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    ) : (
-                                                        <p className="text-sm text-gray-500">No guards assigned</p>
-                                                    )}
-                                                </div>
-
-                                                <div>
-                                                    <h4 className="text-sm font-medium text-gray-500 mb-3">
-                                                        Checkpoints ({plan.checkpoints?.length || 0})
-                                                    </h4>
-                                                    {plan.checkpoints && plan.checkpoints.length > 0 ? (
-                                                        <div className="space-y-3">
-                                                            {plan.checkpoints.map((checkpoint, index) => (
-                                                                <div key={index} className="border border-gray-200 rounded-lg p-4">
-                                                                    <div className="flex justify-between items-start">
-                                                                        <div>
-                                                                            <h5 className="font-medium text-gray-900">
-                                                                                {checkpoint.qrId?.siteId || 'Unknown Site'}
-                                                                            </h5>
-                                                                            <p className="text-sm text-gray-600 mt-1">
-                                                                                {checkpoint.qrId?.description || 'No description'}
-                                                                            </p>
-                                                                        </div>
-                                                                        <div className="text-right">
-                                                                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${checkpoint.isActive
-                                                                                ? 'bg-green-100 text-green-800'
-                                                                                : 'bg-gray-100 text-gray-800'
-                                                                                }`}>
-                                                                                {checkpoint.isActive ? 'Active' : 'Inactive'}
+                                <div className="bg-white shadow overflow-hidden sm:rounded-lg">
+                                    {patrolPlans.length > 0 ? (
+                                        <div className="overflow-x-auto">
+                                            <table className="min-w-full divide-y divide-gray-200">
+                                                <thead className="bg-gray-50">
+                                                    <tr>
+                                                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                            Plan Details
+                                                        </th>
+                                                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                            Status
+                                                        </th>
+                                                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                            Schedule
+                                                        </th>
+                                                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                            Assigned Guards
+                                                        </th>
+                                                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                            Checkpoints
+                                                        </th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="bg-white divide-y divide-gray-200">
+                                                    {patrolPlans.map((plan) => (
+                                                        <tr key={plan._id} className="hover:bg-gray-50">
+                                                            <td className="px-6 py-4">
+                                                                <div className="flex items-start space-x-3">
+                                                                    <div className="flex-1 min-w-0">
+                                                                        <div className="flex items-center space-x-2">
+                                                                            <h3 className="text-sm font-semibold text-gray-900 truncate">
+                                                                                {plan.planName}
+                                                                            </h3>
+                                                                            <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                                                                                {plan.rounds} round{plan.rounds !== 1 ? 's' : ''}
                                                                             </span>
                                                                         </div>
+                                                                        <p className="text-sm text-gray-500 mt-1 line-clamp-2">
+                                                                            {plan.description || 'No description available'}
+                                                                        </p>
+                                                                        <div className="mt-2 text-xs text-gray-400">
+                                                                            Updated: {new Date(plan.updatedAt).toLocaleDateString()}
+                                                                        </div>
                                                                     </div>
-                                                                    {checkpoint.order !== undefined && (
-                                                                        <div className="mt-2 text-xs text-gray-500">
-                                                                            Order: {checkpoint.order + 1}
+                                                                </div>
+                                                            </td>
+
+                                                            <td className="px-6 py-4 whitespace-nowrap">
+                                                                <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${plan.isActive
+                                                                        ? 'bg-green-100 text-green-800'
+                                                                        : 'bg-gray-100 text-gray-800'
+                                                                    }`}>
+                                                                    {plan.isActive ? 'Active' : 'Inactive'}
+                                                                </span>
+                                                            </td>
+
+                                                            <td className="px-6 py-4">
+                                                                <div className="text-sm text-gray-900 space-y-1">
+                                                                    <div className="capitalize">
+                                                                        <span className="font-medium">Frequency:</span> {plan.frequency}
+                                                                    </div>
+                                                                    {plan.frequency === 'custom' && plan.customFrequency?.days && (
+                                                                        <div className="text-xs text-gray-600">
+                                                                            Days: {plan.customFrequency.days.join(', ')}
+                                                                        </div>
+                                                                    )}
+                                                                    <div className="text-xs text-gray-500">
+                                                                        {new Date(plan.startDate).toLocaleDateString()} - {new Date(plan.endDate).toLocaleDateString()}
+                                                                    </div>
+                                                                </div>
+                                                            </td>
+
+                                                            <td className="px-6 py-4">
+                                                                <div className="space-y-2">
+                                                                    {plan.assignedGuards && plan.assignedGuards.length > 0 ? (
+                                                                        plan.assignedGuards.map((assignment, index) => (
+                                                                            <div key={index} className="flex items-center space-x-2 text-sm">
+                                                                                <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                                                                                <span className="font-medium text-gray-900">
+                                                                                    {assignment.guardId?.name || 'Unknown Guard'}
+                                                                                </span>
+                                                                                {assignment.guardId?.phone && (
+                                                                                    <span className="text-gray-500 text-xs">
+                                                                                        ({assignment.guardId.phone})
+                                                                                    </span>
+                                                                                )}
+                                                                            </div>
+                                                                        ))
+                                                                    ) : (
+                                                                        <span className="text-sm text-gray-400 italic">No guards assigned</span>
+                                                                    )}
+                                                                </div>
+                                                            </td>
+
+                                                            <td className="px-6 py-4">
+                                                                <div className="text-sm text-gray-900">
+                                                                    <div className="font-medium mb-2">
+                                                                        {plan.checkpoints?.length || 0} checkpoint{(plan.checkpoints?.length || 0) !== 1 ? 's' : ''}
+                                                                    </div>
+                                                                    {plan.checkpoints && plan.checkpoints.slice(0, 3).map((checkpoint, index) => (
+                                                                        <div key={index} className="text-xs text-gray-600 flex items-center space-x-1 mb-1">
+                                                                            <div className={`w-2 h-2 rounded-full ${checkpoint.isActive ? 'bg-green-500' : 'bg-gray-300'
+                                                                                }`}></div>
+                                                                            <span className="truncate">
+                                                                                {checkpoint.qrId?.siteId || 'Unknown Site'}
+                                                                                {checkpoint.order !== undefined && ` (#${checkpoint.order + 1})`}
+                                                                            </span>
+                                                                        </div>
+                                                                    ))}
+                                                                    {plan.checkpoints && plan.checkpoints.length > 3 && (
+                                                                        <div className="text-xs text-blue-600 font-medium">
+                                                                            +{plan.checkpoints.length - 3} more
                                                                         </div>
                                                                     )}
                                                                 </div>
-                                                            ))}
-                                                        </div>
-                                                    ) : (
-                                                        <p className="text-sm text-gray-500">No checkpoints configured</p>
-                                                    )}
-                                                </div>
-
-                                                <div className="mt-6 pt-4 border-t border-gray-200">
-                                                    <div className="flex justify-between text-xs text-gray-500">
-                                                        <span>
-                                                            Created: {new Date(plan.createdAt).toLocaleString()}
-                                                        </span>
-                                                        <span>
-                                                            Last Updated: {new Date(plan.updatedAt).toLocaleString()}
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                            </div>
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
                                         </div>
-                                    ))}
-                                    {patrolPlans.length === 0 && (
-                                        <div className="text-center py-12 bg-white rounded-lg shadow">
+                                    ) : (
+                                        <div className="text-center py-12">
                                             <Target className="mx-auto h-12 w-12 text-gray-400" />
                                             <h3 className="mt-2 text-sm font-medium text-gray-900">No patrol plans</h3>
                                             <p className="mt-1 text-sm text-gray-500">No patrol plans have been created yet.</p>
@@ -1288,415 +1320,519 @@ const EmployeeDashboard = () => {
 
                     {/* INCIDENTS */}
                     {activeTab === 'incidents' && (
-                        <div>
-                            <div className="flex justify-between items-center mb-6">
-                                <h2 className="text-2xl font-bold text-gray-900">Incident Management</h2>
-                            </div>
-                            {loading ? (
-                                <div className="text-center py-8">Loading...</div>
-                            ) : (
-                                <div className="bg-white shadow overflow-hidden sm:rounded-md">
-                                    <ul className="divide-y divide-gray-200">
-                                        {incidents.map((incident) => (
-                                            <li key={incident._id} className="px-6 py-4">
-                                                <div className="flex justify-between items-start">
-                                                    <div className="flex-1">
-                                                        <div className="flex items-center justify-between mb-2">
-                                                            <h3 className="text-lg font-medium text-gray-900">
-                                                                {incident.title}
-                                                            </h3>
-                                                            <div className="flex space-x-2">
-                                                                <span className={`px-2 py-1 rounded-full text-xs ${getIncidentSeverityColor(incident.severity)}`}>
-                                                                    {incident.severity}
-                                                                </span>
-                                                                <span className={`px-2 py-1 rounded-full text-xs ${getIncidentStatusColor(incident.status)}`}>
-                                                                    {incident.status}
-                                                                </span>
-                                                            </div>
-                                                        </div>
-                                                        <p className="text-sm text-gray-600 mb-2">{incident.description}</p>
-                                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs text-gray-500 mb-4">
-                                                            <div>
-                                                                <strong>Location:</strong><br />
-                                                                {incident.location?.address || `Lat: ${incident.location?.lat}, Lng: ${incident.location?.lng}` || 'N/A'}
-                                                            </div>
-                                                            <div>
-                                                                <strong>Reported By:</strong><br />
-                                                                {incident.reportedBy?.name || 'Unknown'}
-                                                            </div>
-                                                            <div>
-                                                                <strong>Reported At:</strong><br />
-                                                                {new Date(incident.createdAt).toLocaleString()}
-                                                            </div>
-                                                            <div>
-                                                                <strong>Last Updated:</strong><br />
-                                                                {new Date(incident.updatedAt).toLocaleString()}
-                                                            </div>
-                                                        </div>
-
-                                                        {incident.photos && incident.photos.length > 0 && (
-                                                            <div className="flex flex-wrap gap-2 mb-4">
-                                                                {incident.photos.map((photo, idx) => (
-                                                                    <img
-                                                                        key={idx}
-                                                                        src={photo}
-                                                                        alt={`Incident ${incident.title} photo ${idx + 1}`}
-                                                                        className="w-32 h-32 object-cover rounded-md border"
-                                                                    />
-                                                                ))}
-                                                            </div>
-                                                        )}
-
-                                                        {incident.video && (
-                                                            <div className="mb-4">
-                                                                <video controls className="w-full max-w-md rounded-md border">
-                                                                    <source src={incident.video} type="video/mp4" />
-                                                                    Your browser does not support the video tag.
-                                                                </video>
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                </div>
-
-                                                <div className="flex flex-wrap gap-2 mt-4">
-                                                    {['reported', 'investigating', 'in-progress', 'resolved', 'closed'].map((status) => (
-                                                        <button
-                                                            key={status}
-                                                            onClick={() => updateIncidentStatus(incident._id, status)}
-                                                            className={`px-3 py-1 text-xs rounded-full capitalize ${incident.status === status
-                                                                ? 'bg-indigo-600 text-white'
-                                                                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                                                                }`}
-                                                        >
-                                                            {status.replace('-', ' ')}
-                                                        </button>
-                                                    ))}
-                                                </div>
-                                            </li>
-                                        ))}
-                                        {incidents.length === 0 && (
-                                            <li className="px-6 py-8 text-center text-gray-500">
-                                                No incidents found
-                                            </li>
-                                        )}
-                                    </ul>
-                                </div>
-                            )}
-                        </div>
-                    )}
+                                         <div>
+                                             <h2 className="text-2xl font-bold text-gray-900 mb-6">Incidents</h2>
+                                             <div className="bg-white shadow overflow-hidden sm:rounded-lg">
+                                                 {loading ? (
+                                                     <div className="flex justify-center items-center py-8">
+                                                         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+                                                     </div>
+                                                 ) : !incidents?.length ? (
+                                                     <div className="text-center py-8">
+                                                         <AlertTriangle className="mx-auto h-12 w-12 text-gray-400" />
+                                                         <h3 className="mt-2 text-sm font-medium text-gray-900">No incidents</h3>
+                                                         <p className="mt-1 text-sm text-gray-500">No incidents reported yet.</p>
+                                                     </div>
+                                                 ) : (
+                                                     <div className="overflow-x-auto">
+                                                         <table className="min-w-full divide-y divide-gray-200">
+                                                             <thead className="bg-gray-50">
+                                                                 <tr>
+                                                                     {/* <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Incident Details</th> */}
+                                                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Guard Information</th>
+                                                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Media</th>
+                                                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                                                 </tr>
+                                                             </thead>
+                                                             <tbody className="bg-white divide-y divide-gray-200">
+                                                                 {incidents.map((incident) => (
+                                                                     <tr key={incident._id} className="hover:bg-gray-50">
+                                                                         {/* Incident Details */}
+                                                                         {/* <td className="px-6 py-4 whitespace-nowrap">
+                                                                             <div className="flex items-start">
+                                                                                 <AlertTriangle
+                                                                                     className={`h-6 w-6 mt-1 mr-3 ${incident.severity === "critical"
+                                                                                             ? "text-red-800"
+                                                                                             : incident.severity === "high"
+                                                                                                 ? "text-red-600"
+                                                                                                 : incident.severity === "medium"
+                                                                                                     ? "text-yellow-600"
+                                                                                                     : "text-green-600"
+                                                                                         }`}
+                                                                                 />
+                                                                                 <div>
+                                                                                     <div className="text-sm font-medium text-gray-900">{incident.title}</div>
+                                                                                     <div className="text-sm text-gray-500">
+                                                                                         <span className="inline-block bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full mr-2">
+                                                                                             {incident.type}
+                                                                                         </span>
+                                                                                         <span className={`inline-block text-xs px-2 py-1 rounded-full mr-2 ${incident.severity === "critical"
+                                                                                                 ? "bg-red-100 text-red-800"
+                                                                                                 : incident.severity === "high"
+                                                                                                     ? "bg-orange-100 text-orange-800"
+                                                                                                     : incident.severity === "medium"
+                                                                                                         ? "bg-yellow-100 text-yellow-800"
+                                                                                                         : "bg-green-100 text-green-800"
+                                                                                             }`}>
+                                                                                             {incident.severity}
+                                                                                         </span>
+                                                                                     </div>
+                                                                                     <div className="text-xs text-gray-400 mt-1">
+                                                                                         {new Date(incident.createdAt).toLocaleDateString()} • {new Date(incident.createdAt).toLocaleTimeString()}
+                                                                                     </div>
+                                                                                     {incident.description && (
+                                                                                         <div className="mt-2 text-sm text-gray-700 max-w-xs">{incident.description}</div>
+                                                                                     )}
+                                                                                     {incident.location?.lat && incident.location?.lng && (
+                                                                                         <div className="mt-2">
+                                                                                             <a
+                                                                                                 href={`https://www.google.com/maps?q=${incident.location.lat},${incident.location.lng}`}
+                                                                                                 target="_blank"
+                                                                                                 rel="noopener noreferrer"
+                                                                                                 className="text-xs text-blue-600 hover:text-blue-800 flex items-center"
+                                                                                             >
+                                                                                                 <MapPin className="h-3 w-3 mr-1" />
+                                                                                                 View Location
+                                                                                             </a>
+                                                                                         </div>
+                                                                                     )}
+                                                                                 </div>
+                                                                             </div>
+                                                                         </td> */}
+                 
+                                                                         {/* Guard Information */}
+                                                                         <td className="px-6 py-4 whitespace-nowrap">
+                                                                             <div className="space-y-2">
+                                                                                 <div>
+                                                                                     <div className="text-xs font-medium text-gray-500">Reported By</div>
+                                                                                     <div className="text-sm text-gray-900">
+                                                                                         {incident.reportedBy?.name || "Unknown"}
+                                                                                     </div>
+                                                                                     <div className="text-xs text-gray-500">
+                                                                                         {incident.reportedBy?.role || "Guard"}
+                                                                                     </div>
+                                                                                 </div>
+                 
+                                                                                 {incident.assignedTo?.length > 0 && (
+                                                                                     <div>
+                                                                                         <div className="text-xs font-medium text-gray-500">Assigned To</div>
+                                                                                         {incident.assignedTo.map((user, index) => (
+                                                                                             <div key={index} className="text-sm text-gray-900">
+                                                                                                 {user.name}
+                                                                                                 <div className="text-xs text-gray-500">{user.role}</div>
+                                                                                             </div>
+                                                                                         ))}
+                                                                                     </div>
+                                                                                 )}
+                 
+                                                                                 {incident.companyId && (
+                                                                                     <div>
+                                                                                         <div className="text-xs font-medium text-gray-500">Company</div>
+                                                                                         <div className="text-sm text-gray-900">
+                                                                                             {incident.companyId?.name || "N/A"}
+                                                                                         </div>
+                                                                                     </div>
+                                                                                 )}
+                                                                             </div>
+                                                                         </td>
+                 
+                                                                         {/* Media Section */}
+                                                                         <td className="px-6 py-4">
+                                                                             <div className="space-y-3">
+                                                                                 {/* Photos */}
+                                                                                 {incident.photos?.length > 0 && (
+                                                                                     <div>
+                                                                                         <div className="text-xs font-medium text-gray-500 mb-1">Photos ({incident.photos.length})</div>
+                                                                                         <div className="flex gap-2 flex-wrap">
+                                                                                             {incident.photos.slice(0, 3).map((photo, index) => (
+                                                                                                 <a
+                                                                                                     key={index}
+                                                                                                     href={photo}
+                                                                                                     target="_blank"
+                                                                                                     rel="noopener noreferrer"
+                                                                                                     className="block"
+                                                                                                 >
+                                                                                                     <img
+                                                                                                         src={photo}
+                                                                                                         alt={`Incident photo ${index + 1}`}
+                                                                                                         className="h-16 w-16 object-cover rounded border cursor-pointer hover:scale-105 transition-transform"
+                                                                                                     />
+                                                                                                 </a>
+                                                                                             ))}
+                                                                                             {incident.photos.length > 3 && (
+                                                                                                 <div className="h-16 w-16 bg-gray-100 rounded border flex items-center justify-center text-xs text-gray-500">
+                                                                                                     +{incident.photos.length - 3} more
+                                                                                                 </div>
+                                                                                             )}
+                                                                                         </div>
+                                                                                     </div>
+                                                                                 )}
+                 
+                                                                                 {/* Video */}
+                                                                                 {incident.video && (
+                                                                                     <div>
+                                                                                         <div className="text-xs font-medium text-gray-500 mb-1">Video</div>
+                                                                                         <video
+                                                                                             controls
+                                                                                             className="h-16 w-16 object-cover rounded border cursor-pointer"
+                                                                                             src={incident.video}
+                                                                                             preload="metadata"
+                                                                                         >
+                                                                                             Your browser does not support the video tag.
+                                                                                         </video>
+                                                                                     </div>
+                                                                                 )}
+                 
+                                                                                 {!incident.photos?.length && !incident.video && (
+                                                                                     <div className="text-xs text-gray-400">No media</div>
+                                                                                 )}
+                                                                             </div>
+                                                                         </td>
+                 
+                                                                         {/* Status */}
+                                                                         <td className="px-6 py-4 whitespace-nowrap">
+                                                                             <select
+                                                                                 value={incident.status}
+                                                                                 onChange={(e) => updateIncidentStatus(incident._id, e.target.value)}
+                                                                                 className={`text-sm border rounded-md px-3 py-2 focus:outline-none focus:ring-1 focus:ring-indigo-500 w-full max-w-32 ${incident.status === "reported"
+                                                                                         ? "border-yellow-300 bg-yellow-50"
+                                                                                         : incident.status === "investigating"
+                                                                                             ? "border-blue-300 bg-blue-50"
+                                                                                             : incident.status === "in-progress"
+                                                                                                 ? "border-orange-300 bg-orange-50"
+                                                                                                 : incident.status === "resolved"
+                                                                                                     ? "border-green-300 bg-green-50"
+                                                                                                     : "border-gray-300 bg-gray-50"
+                                                                                     }`}
+                                                                             >
+                                                                                 <option value="reported">Reported</option>
+                                                                                 <option value="investigating">Investigating</option>
+                                                                                 <option value="in-progress">In Progress</option>
+                                                                                 <option value="resolved">Resolved</option>
+                                                                                 <option value="closed">Closed</option>
+                                                                             </select>
+                                                                             <div className="text-xs text-gray-500 mt-1">
+                                                                                 Last updated: {new Date(incident.updatedAt).toLocaleDateString()}
+                                                                             </div>
+                                                                         </td>
+                                                                     </tr>
+                                                                 ))}
+                                                             </tbody>
+                                                         </table>
+                                                     </div>
+                                                 )}
+                                             </div>
+                                         </div>
+                                     )}
 
                     {/* GUARD REPORTS SECTION */}
-                          {activeTab === 'guard-reports' && (
-                                          <div>
-                                              <div className="flex justify-between items-center mb-6">
-                                                  <h2 className="text-2xl font-bold text-gray-900">Guard Performance Reports</h2>
-                                              </div>
-                  
-                                              {/* Report Generator */}
-                                              <div className="bg-white p-6 rounded-lg shadow mb-6">
-                                                  <h3 className="text-lg font-medium text-gray-900 mb-4">Generate Performance Report</h3>
-                                                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
-                                                      <div>
-                                                          <label className="block text-sm font-medium text-gray-700 mb-1">Select Guard</label>
-                                                          <select
-                                                              value={selectedGuard}
-                                                              onChange={(e) => setSelectedGuard(e.target.value)}
-                                                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                                                          >
-                                                              <option value="">Choose a guard</option>
-                                                              {guards.filter(guard => guard.isActive).map(guard => (
-                                                                  <option key={guard._id} value={guard._id}>
-                                                                      {guard.name}
-                                                                  </option>
-                                                              ))}
-                                                          </select>
-                                                      </div>
-                                                      <div>
-                                                          <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
-                                                          <input
-                                                              type="date"
-                                                              value={reportFilters.startDate}
-                                                              onChange={(e) => setReportFilters(prev => ({ ...prev, startDate: e.target.value }))}
-                                                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                                                          />
-                                                      </div>
-                                                      <div>
-                                                          <label className="block text-sm font-medium text-gray-700 mb-1">End Date</label>
-                                                          <input
-                                                              type="date"
-                                                              value={reportFilters.endDate}
-                                                              onChange={(e) => setReportFilters(prev => ({ ...prev, endDate: e.target.value }))}
-                                                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                                                          />
-                                                      </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Shift (Optional)</label>
-                                        <select
-                                            value={reportFilters.shiftId}
-                                            onChange={(e) => setReportFilters(prev => ({ ...prev, shiftId: e.target.value }))}
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                                            disabled={shifts.length === 0 && loading}
-                                        >
-                                            <option value="">All Shifts</option>
-                                            {shifts.length === 0 ? (
-                                                <option value="" disabled>Loading shifts...</option>
-                                            ) : (
-                                                shifts.map(shift => (
-                                                    <option key={shift._id} value={shift._id}>
-                                                        {shift.shiftName || shift.shiftType}
-                                                    </option>
-                                                ))
-                                            )}
-                                        </select>
-                                    </div>
-                                                  </div>
-                                                  <button
-                                                      onClick={handleGenerateReport}
-                                                      disabled={!selectedGuard || generatingReport}
-                                                      className="flex items-center px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                                                  >
-                                                      {generatingReport ? (
-                                                          <>
-                                                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                                                              Generating...
-                                                          </>
-                                                      ) : (
-                                                          <>
-                                                              <FileText className="w-4 h-4 mr-2" />
-                                                              Generate Report
-                                                          </>
-                                                      )}
-                                                  </button>
-                                              </div>
-                  
-                                              {/* Reports List */}
-                                              <div className="space-y-6">
-                                                  {guardReports.length === 0 ? (
-                                                      <div className="text-center py-12 bg-white rounded-lg shadow">
-                                                          <FileText className="mx-auto h-16 w-16 text-gray-400" />
-                                                          <h3 className="mt-4 text-lg font-medium text-gray-900">No reports generated</h3>
-                                                          <p className="mt-2 text-sm text-gray-500">
-                                                              Generate a performance report to see guard analytics and metrics.
-                                                          </p>
-                                                      </div>
-                                                  ) : (
-                                                      guardReports.map((report, index) => (
-                                                          <div key={index} className="bg-white rounded-lg shadow overflow-hidden">
-                                                              {/* Report Header */}
-                                                              <div className="bg-gray-50 px-6 py-4 border-b">
-                                                                  <div className="flex justify-between items-center">
-                                                                      <div>
-                                                                          <h3 className="text-lg font-medium text-gray-900">
-                                                                              {report.guard?.name || 'Unknown Guard'} - Performance Report
-                                                                          </h3>
-                                                                          <p className="text-sm text-gray-500">
-                                                                              Period: {formatDateTimeForDisplay(report.reportPeriod?.startDate).split(',')[0]} - {formatDateTimeForDisplay(report.reportPeriod?.endDate).split(',')[0]}
-                                                                              {report.reportPeriod?.totalDays && (
-                                                                                  <span className="ml-2">({report.reportPeriod.totalDays} days)</span>
-                                                                              )}
-                                                                          </p>
-                                                                          <p className="text-sm text-gray-500">
-                                                                              Phone: {report.guard?.phone}
-                                                                          </p>
-                                                                      </div>
-                                                                      <div className="flex items-center space-x-3">
-                                                                          <div className="text-right">
-                                                                              <div className={`text-2xl font-bold ${parseFloat(report.performance?.overallScore || '0') >= 80 ? 'text-green-600' :
-                                                                                  parseFloat(report.performance?.overallScore || '0') >= 60 ? 'text-yellow-600' :
-                                                                                      'text-red-600'
-                                                                                  }`}>
-                                                                                  {report.performance?.overallScore || '0'}%
-                                                                              </div>
-                                                                              <div className="text-xs text-gray-500">
-                                                                                  {report.performance?.rating || 'Overall Score'}
-                                                                              </div>
-                                                                          </div>
-                                                                          <button
-                                                                              onClick={() => downloadExcelReport(report)}
-                                                                              className="flex items-center px-3 py-2 text-sm text-white bg-green-600 border border-green-700 rounded-md hover:bg-green-700"
-                                                                          >
-                                                                              <Download className="w-4 h-4 mr-1" />
-                                                                              Excel
-                                                                          </button>
-                                                                      </div>
-                                                                  </div>
-                                                              </div>
-                  
-                                                              {/* Performance Summary */}
-                                                              <div className="px-6 py-4 border-b bg-indigo-50">
-                                                                  <h4 className="text-md font-medium text-gray-900 mb-3">Performance Summary</h4>
-                                                                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                                                      <div className="text-center">
-                                                                          <div className="text-lg font-bold text-blue-600">
-                                                                              {report.roundsPerformance?.summary?.totalCompletedRounds || 0}/{report.roundsPerformance?.summary?.totalExpectedRounds || 0}
-                                                                          </div>
-                                                                          <div className="text-sm text-gray-600">Rounds Completed</div>
-                                                                      </div>
-                                                                      <div className="text-center">
-                                                                          <div className="text-lg font-bold text-purple-600">
-                                                                              {report.roundsPerformance?.summary?.totalCompletedScans || 0}/{report.roundsPerformance?.summary?.totalExpectedScans || 0}
-                                                                          </div>
-                                                                          <div className="text-sm text-gray-600">Scans Completed</div>
-                                                                      </div>
-                                                                      <div className="text-center">
-                                                                          <div className={`text-lg font-bold ${parseFloat(report.roundsPerformance?.summary?.roundsCompletionRate) >= 80 ? 'text-green-600' :
-                                                                              parseFloat(report.roundsPerformance?.summary?.roundsCompletionRate) >= 60 ? 'text-yellow-600' :
-                                                                                  'text-red-600'
-                                                                              }`}>
-                                                                              {report.roundsPerformance?.summary?.roundsCompletionRate || '0%'}
-                                                                          </div>
-                                                                          <div className="text-sm text-gray-600">Rounds Completion</div>
-                                                                      </div>
-                                                                      <div className="text-center">
-                                                                          <div className="text-lg font-bold text-indigo-600">
-                                                                              {report.summary?.efficiency || '0%'}
-                                                                          </div>
-                                                                          <div className="text-sm text-gray-600">Overall Efficiency</div>
-                                                                      </div>
-                                                                  </div>
-                                                              </div>
-                  
-                                                              {/* Plan Breakdown */}
-                                                              {report.roundsPerformance?.planBreakdown && report.roundsPerformance.planBreakdown.length > 0 && (
-                                                                  <div className="px-6 py-4 border-b bg-white">
-                                                                      <h4 className="text-md font-medium text-gray-900 mb-3">Plan Breakdown</h4>
-                                                                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                                                          {report.roundsPerformance.planBreakdown.map((plan, idx) => (
-                                                                              <div key={idx} className="bg-white border border-gray-200 rounded-lg p-4">
-                                                                                  <h5 className="font-medium text-gray-900 mb-2">{plan.planName}</h5>
-                                                                                  <div className="space-y-2 text-sm">
-                                                                                      <div className="flex justify-between">
-                                                                                          <span className="text-gray-600">Rounds:</span>
-                                                                                          <span className="font-medium">{plan.completedRounds}/{plan.totalRounds}</span>
-                                                                                      </div>
-                                                                                      <div className="flex justify-between">
-                                                                                          <span className="text-gray-600">Scans:</span>
-                                                                                          <span className="font-medium">{plan.completedScans}/{plan.totalRounds * plan.totalCheckpoints}</span>
-                                                                                      </div>
-                                                                                      <div className="flex justify-between">
-                                                                                          <span className="text-gray-600">Completion:</span>
-                                                                                          <span className={`font-medium ${parseFloat(plan.completionRate) >= 80 ? 'text-green-600' :
-                                                                                              parseFloat(plan.completionRate) >= 60 ? 'text-yellow-600' :
-                                                                                                  'text-red-600'
-                                                                                              }`}>
-                                                                                              {plan.completionRate}
-                                                                                          </span>
-                                                                                      </div>
-                                                                                  </div>
-                                                                              </div>
-                                                                          ))}
-                                                                      </div>
-                                                                  </div>
-                                                              )}
-                  
-                                                              {/* Progress Summary */}
-                                                              <div className="px-6 py-4 border-b bg-green-50">
-                                                                  <div className="flex items-center justify-between">
-                                                                      <div>
-                                                                          <h4 className="text-md font-medium text-gray-900">Progress Summary</h4>
-                                                                          <p className="text-sm text-gray-600 mt-1">{report.summary?.progress}</p>
-                                                                      </div>
-                                                                      <div className="text-right">
-                                                                          <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${report.summary?.status === 'Good' ? 'bg-green-100 text-green-800' :
-                                                                              report.summary?.status === 'Needs Improvement' ? 'bg-yellow-100 text-yellow-800' :
-                                                                                  'bg-red-100 text-red-800'
-                                                                              }`}>
-                                                                              {report.summary?.status}
-                                                                          </span>
-                                                                      </div>
-                                                                  </div>
-                                                              </div>
-                  
-                                                              {/* Detailed Rounds Performance Table */}
-                                                              <div className="p-6">
-                                                                  <div className="flex justify-between items-center mb-4">
-                                                                      <h4 className="text-md font-medium text-gray-900">Detailed Patrol Rounds</h4>
-                                                                      <div className="text-sm text-gray-500">
-                                                                          Total Records: {report.detailedRounds?.length || 0}
-                                                                      </div>
-                                                                  </div>
-                  
-                                                                  {report.detailedRounds && report.detailedRounds.length > 0 ? (
-                                                                      <div className="overflow-x-auto">
-                                                                          <table className="min-w-full divide-y divide-gray-200">
-                                                                              <thead className="bg-gray-50">
-                                                                                  <tr>
-                                                                                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                                                          Date
-                                                                                      </th>
-                                                                                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                                                          Round
-                                                                                      </th>
-                                                                                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                                                          Plan Name
-                                                                                      </th>
-                                                                                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                                                          Checkpoint
-                                                                                      </th>
-                                                                                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                                                          Actual Time
-                                                                                      </th>
-                                                                                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                                                          Status
-                                                                                      </th>
-                                                                                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                                                          Distance
-                                                                                      </th>
-                                                                                  </tr>
-                                                                              </thead>
-                                                                              <tbody className="bg-white divide-y divide-gray-200">
-                                                                                  {report.detailedRounds.map((round, idx) => (
-                                                                                      <tr key={idx} className="hover:bg-gray-50">
-                                                                                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                                                                                              {formatDateTimeForDisplay(round.date).split(' ').slice(0, 3).join(' ')}
-                                                                                          </td>
-                                                                                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                                                                                              Round {round.roundNumber}
-                                                                                          </td>
-                                                                                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 font-medium">
-                                                                                              {round.planName || 'N/A'}
-                                                                                          </td>
-                                                                                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                                                                                              <div>
-                                                                                                  <div className="font-medium">{round.checkpointName}</div>
-                                                                                                  {round.checkpointDescription && (
-                                                                                                      <div className="text-xs text-gray-400">{round.checkpointDescription}</div>
-                                                                                                  )}
-                                                                                              </div>
-                                                                                          </td>
-                                                                                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                                                                                              {round.actualTime ? formatTimeForDisplay(round.actualTime).split(' ').slice(0, 2).join(' ') : 'Not Scanned'}
-                                                                                          </td>
-                                                                                          <td className="px-4 py-3 whitespace-nowrap">
-                                                                                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${round.status === 'completed' ? 'bg-green-100 text-green-800' :
-                                                                                                  round.status === 'missed' ? 'bg-red-100 text-red-800' :
-                                                                                                      'bg-gray-100 text-gray-800'
-                                                                                                  }`}>
-                                                                                                  {round.status ? round.status.charAt(0).toUpperCase() + round.status.slice(1) : 'Pending'}
-                                                                                              </span>
-                                                                                          </td>
-                                                                                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                                                                                              {round.distanceMeters ? `${round.distanceMeters}m` : 'N/A'}
-                                                                                          </td>
-                                                                                      </tr>
-                                                                                  ))}
-                                                                              </tbody>
-                                                                          </table>
-                                                                      </div>
-                                                                  ) : (
-                                                                      <div className="text-center py-8 bg-gray-50 rounded-lg">
-                                                                          <Target className="mx-auto h-8 w-8 text-gray-400" />
-                                                                          <p className="mt-2 text-sm text-gray-500">No patrol rounds data available for this period</p>
-                                                                          <p className="text-xs text-gray-400">The guard may not have any assigned patrol plans or scans</p>
-                                                                      </div>
-                                                                  )}
-                                                              </div>
-                                                          </div>
-                                                      ))
-                                                  )}
-                                              </div>
-                                          </div>
-                                      )}
+                             {activeTab === 'guard-reports' && (
+                                                     <div>
+                                                         <div className="flex justify-between items-center mb-6">
+                                                             <h2 className="text-2xl font-bold text-gray-900">Guard Performance Reports</h2>
+                                                         </div>
+                         
+                                                         {/* Report Generator */}
+                                                         <div className="bg-white p-6 rounded-lg shadow mb-6">
+                                                             <h3 className="text-lg font-medium text-gray-900 mb-4">Generate Performance Report</h3>
+                                                             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                                                                 <div>
+                                                                     <label className="block text-sm font-medium text-gray-700 mb-1">Select Guard</label>
+                                                                     <select
+                                                                         value={selectedGuard}
+                                                                         onChange={(e) => setSelectedGuard(e.target.value)}
+                                                                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                                                                     >
+                                                                         <option value="">Choose a guard</option>
+                                                                         {guards.filter(guard => guard.isActive).map(guard => (
+                                                                             <option key={guard._id} value={guard._id}>
+                                                                                 {guard.name}
+                                                                             </option>
+                                                                         ))}
+                                                                     </select>
+                                                                 </div>
+                                                                 <div>
+                                                                     <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
+                                                                     <input
+                                                                         type="date"
+                                                                         value={reportFilters.startDate}
+                                                                         onChange={(e) => setReportFilters(prev => ({ ...prev, startDate: e.target.value }))}
+                                                                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                                                                     />
+                                                                 </div>
+                                                                 <div>
+                                                                     <label className="block text-sm font-medium text-gray-700 mb-1">End Date</label>
+                                                                     <input
+                                                                         type="date"
+                                                                         value={reportFilters.endDate}
+                                                                         onChange={(e) => setReportFilters(prev => ({ ...prev, endDate: e.target.value }))}
+                                                                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                                                                     />
+                                                                 </div>
+                                                                 <div>
+                                                                     <label className="block text-sm font-medium text-gray-700 mb-1">Shift (Optional)</label>
+                                                                     <select
+                                                                         value={reportFilters.shiftId}
+                                                                         onChange={(e) => setReportFilters(prev => ({ ...prev, shiftId: e.target.value }))}
+                                                                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                                                                     >
+                                                                         <option value="">All Shifts</option>
+                                                                         {shifts.map(shift => (
+                                                                             <option key={shift._id} value={shift._id}>
+                                                                                 {shift.shiftName || shift.shiftType}
+                                                                             </option>
+                                                                         ))}
+                                                                     </select>
+                                                                 </div>
+                                                             </div>
+                                                             <button
+                                                                 onClick={handleGenerateReport}
+                                                                 disabled={!selectedGuard || generatingReport}
+                                                                 className="flex items-center px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                             >
+                                                                 {generatingReport ? (
+                                                                     <>
+                                                                         <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                                                         Generating...
+                                                                     </>
+                                                                 ) : (
+                                                                     <>
+                                                                         <FileText className="w-4 h-4 mr-2" />
+                                                                         Generate Report
+                                                                     </>
+                                                                 )}
+                                                             </button>
+                                                         </div>
+                         
+                                                         {/* Reports List */}
+                                                         <div className="space-y-6">
+                                                             {guardReports.length === 0 ? (
+                                                                 <div className="text-center py-12 bg-white rounded-lg shadow">
+                                                                     <FileText className="mx-auto h-16 w-16 text-gray-400" />
+                                                                     <h3 className="mt-4 text-lg font-medium text-gray-900">No reports generated</h3>
+                                                                     <p className="mt-2 text-sm text-gray-500">
+                                                                         Generate a performance report to see guard analytics and metrics.
+                                                                     </p>
+                                                                 </div>
+                                                             ) : (
+                                                                 guardReports.map((report, index) => (
+                                                                     <div key={index} className="bg-white rounded-lg shadow overflow-hidden">
+                                                                         {/* Report Header */}
+                                                                         <div className="bg-gray-50 px-6 py-4 border-b">
+                                                                             <div className="flex justify-between items-center">
+                                                                                 <div>
+                                                                                     <h3 className="text-lg font-medium text-gray-900">
+                                                                                         {report.guard?.name || 'Unknown Guard'} - Performance Report
+                                                                                     </h3>
+                                                                                     <p className="text-sm text-gray-500">
+                                                                                         Period: {formatDateTimeForDisplay(report.reportPeriod?.startDate).split(',')[0]} - {formatDateTimeForDisplay(report.reportPeriod?.endDate).split(',')[0]}
+                                                                                         {report.reportPeriod?.totalDays && (
+                                                                                             <span className="ml-2">({report.reportPeriod.totalDays} days)</span>
+                                                                                         )}
+                                                                                     </p>
+                                                                                     <p className="text-sm text-gray-500">
+                                                                                         Phone: {report.guard?.phone}
+                                                                                     </p>
+                                                                                 </div>
+                                                                                 <div className="flex items-center space-x-3">
+                                                                                     <div className="text-right">
+                                                                                         <div className={`text-2xl font-bold ${parseFloat(report.performance?.overallScore || '0') >= 80 ? 'text-green-600' :
+                                                                                             parseFloat(report.performance?.overallScore || '0') >= 60 ? 'text-yellow-600' :
+                                                                                                 'text-red-600'
+                                                                                             }`}>
+                                                                                             {report.performance?.overallScore || '0'}%
+                                                                                         </div>
+                                                                                         <div className="text-xs text-gray-500">
+                                                                                             {report.performance?.rating || 'Overall Score'}
+                                                                                         </div>
+                                                                                     </div>
+                                                                                     <button
+                                                                                         onClick={() => downloadExcelReport(report)}
+                                                                                         className="flex items-center px-3 py-2 text-sm text-white bg-green-600 border border-green-700 rounded-md hover:bg-green-700"
+                                                                                     >
+                                                                                         <Download className="w-4 h-4 mr-1" />
+                                                                                         Excel
+                                                                                     </button>
+                                                                                 </div>
+                                                                             </div>
+                                                                         </div>
+                         
+                                                                         {/* Performance Summary */}
+                                                                         <div className="px-6 py-4 border-b bg-indigo-50">
+                                                                             <h4 className="text-md font-medium text-gray-900 mb-3">Performance Summary</h4>
+                                                                             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                                                                 <div className="text-center">
+                                                                                     <div className="text-lg font-bold text-blue-600">
+                                                                                         {report.roundsPerformance?.summary?.totalCompletedRounds || 0}/{report.roundsPerformance?.summary?.totalExpectedRounds || 0}
+                                                                                     </div>
+                                                                                     <div className="text-sm text-gray-600">Rounds Completed</div>
+                                                                                 </div>
+                                                                                 <div className="text-center">
+                                                                                     <div className="text-lg font-bold text-purple-600">
+                                                                                         {report.roundsPerformance?.summary?.totalCompletedScans || 0}/{report.roundsPerformance?.summary?.totalExpectedScans || 0}
+                                                                                     </div>
+                                                                                     <div className="text-sm text-gray-600">Scans Completed</div>
+                                                                                 </div>
+                                                                                 <div className="text-center">
+                                                                                     <div className={`text-lg font-bold ${parseFloat(report.roundsPerformance?.summary?.roundsCompletionRate) >= 80 ? 'text-green-600' :
+                                                                                         parseFloat(report.roundsPerformance?.summary?.roundsCompletionRate) >= 60 ? 'text-yellow-600' :
+                                                                                             'text-red-600'
+                                                                                         }`}>
+                                                                                         {report.roundsPerformance?.summary?.roundsCompletionRate || '0%'}
+                                                                                     </div>
+                                                                                     <div className="text-sm text-gray-600">Rounds Completion</div>
+                                                                                 </div>
+                                                                                 <div className="text-center">
+                                                                                     <div className="text-lg font-bold text-indigo-600">
+                                                                                         {report.summary?.efficiency || '0%'}
+                                                                                     </div>
+                                                                                     <div className="text-sm text-gray-600">Overall Efficiency</div>
+                                                                                 </div>
+                                                                             </div>
+                                                                         </div>
+                         
+                                                                         {/* Plan Breakdown */}
+                                                                         {/* {report.roundsPerformance?.planBreakdown && report.roundsPerformance.planBreakdown.length > 0 && (
+                                                                             <div className="px-6 py-4 border-b bg-white">
+                                                                                 <h4 className="text-md font-medium text-gray-900 mb-3">Plan Breakdown</h4>
+                                                                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                                                                     {report.roundsPerformance.planBreakdown.map((plan, idx) => (
+                                                                                         <div key={idx} className="bg-white border border-gray-200 rounded-lg p-4">
+                                                                                             <h5 className="font-medium text-gray-900 mb-2">{plan.planName}</h5>
+                                                                                             <div className="space-y-2 text-sm">
+                                                                                                 <div className="flex justify-between">
+                                                                                                     <span className="text-gray-600">Rounds:</span>
+                                                                                                     <span className="font-medium">{plan.completedRounds}/{plan.totalRounds}</span>
+                                                                                                 </div>
+                                                                                                 <div className="flex justify-between">
+                                                                                                     <span className="text-gray-600">Scans:</span>
+                                                                                                     <span className="font-medium">{plan.completedScans}/{plan.totalRounds * plan.totalCheckpoints}</span>
+                                                                                                 </div>
+                                                                                                 <div className="flex justify-between">
+                                                                                                     <span className="text-gray-600">Completion:</span>
+                                                                                                     <span className={`font-medium ${parseFloat(plan.completionRate) >= 80 ? 'text-green-600' :
+                                                                                                         parseFloat(plan.completionRate) >= 60 ? 'text-yellow-600' :
+                                                                                                             'text-red-600'
+                                                                                                         }`}>
+                                                                                                         {plan.completionRate}
+                                                                                                     </span>
+                                                                                                 </div>
+                                                                                             </div>
+                                                                                         </div>
+                                                                                     ))}
+                                                                                 </div>
+                                                                             </div>
+                                                                         )} */}
+                         
+                                                                         {/* Progress Summary */}
+                                                                         {/* <div className="px-6 py-4 border-b bg-green-50">
+                                                                             <div className="flex items-center justify-between">
+                                                                                 <div>
+                                                                                     <h4 className="text-md font-medium text-gray-900">Progress Summary</h4>
+                                                                                     <p className="text-sm text-gray-600 mt-1">{report.summary?.progress}</p>
+                                                                                 </div>
+                                                                                 <div className="text-right">
+                                                                                     <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${report.summary?.status === 'Good' ? 'bg-green-100 text-green-800' :
+                                                                                         report.summary?.status === 'Needs Improvement' ? 'bg-yellow-100 text-yellow-800' :
+                                                                                             'bg-red-100 text-red-800'
+                                                                                         }`}>
+                                                                                         {report.summary?.status}
+                                                                                     </span>
+                                                                                 </div>
+                                                                             </div>
+                                                                         </div> */}
+                         
+                                                                         {/* Detailed Rounds Performance Table */}
+                                                                         <div className="p-6">
+                                                                             <div className="flex justify-between items-center mb-4">
+                                                                                 <h4 className="text-md font-medium text-gray-900">Detailed Patrol Rounds</h4>
+                                                                                 <div className="text-sm text-gray-500">
+                                                                                     Total Records: {report.detailedRounds?.length || 0}
+                                                                                 </div>
+                                                                             </div>
+                         
+                                                                             {report.detailedRounds && report.detailedRounds.length > 0 ? (
+                                                                                 <div className="overflow-x-auto">
+                                                                                     <table className="min-w-full divide-y divide-gray-200">
+                                                                                         <thead className="bg-gray-50">
+                                                                                             <tr>
+                                                                                                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                                                                     Date
+                                                                                                 </th>
+                                                                                                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                                                                     Round
+                                                                                                 </th>
+                                                                                                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                                                                     Plan Name
+                                                                                                 </th>
+                                                                                                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                                                                     Checkpoint
+                                                                                                 </th>
+                                                                                                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                                                                     Actual Time
+                                                                                                 </th>
+                                                                                                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                                                                     Status
+                                                                                                 </th>
+                                                                                                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                                                                     Distance
+                                                                                                 </th>
+                                                                                             </tr>
+                                                                                         </thead>
+                                                                                         <tbody className="bg-white divide-y divide-gray-200">
+                                                                                             {report.detailedRounds.map((round, idx) => (
+                                                                                                 <tr key={idx} className="hover:bg-gray-50">
+                                                                                                     <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                                                                                                         {formatDateTimeForDisplay(round.date).split(' ').slice(0, 3).join(' ')}
+                                                                                                     </td>
+                                                                                                     <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                                                                                                         Round {round.roundNumber}
+                                                                                                     </td>
+                                                                                                     <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 font-medium">
+                                                                                                         {round.planName || 'N/A'}
+                                                                                                     </td>
+                                                                                                     <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                                                                                                         <div>
+                                                                                                             <div className="font-medium">{round.checkpointName}</div>
+                                                                                                             {round.checkpointDescription && (
+                                                                                                                 <div className="text-xs text-gray-400">{round.checkpointDescription}</div>
+                                                                                                             )}
+                                                                                                         </div>
+                                                                                                     </td>
+                                                                                                     <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                                                                                                         {round.actualTime ? formatTimeForDisplay(round.actualTime).split(' ').slice(0, 2).join(' ') : 'Not Scanned'}
+                                                                                                     </td>
+                                                                                                     <td className="px-4 py-3 whitespace-nowrap">
+                                                                                                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${round.status === 'completed' ? 'bg-green-100 text-green-800' :
+                                                                                                             round.status === 'missed' ? 'bg-red-100 text-red-800' :
+                                                                                                                 'bg-gray-100 text-gray-800'
+                                                                                                             }`}>
+                                                                                                             {round.status ? round.status.charAt(0).toUpperCase() + round.status.slice(1) : 'Pending'}
+                                                                                                         </span>
+                                                                                                     </td>
+                                                                                                     <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                                                                                                         {round.distanceMeters ? `${round.distanceMeters}m` : 'N/A'}
+                                                                                                     </td>
+                                                                                                 </tr>
+                                                                                             ))}
+                                                                                         </tbody>
+                                                                                     </table>
+                                                                                 </div>
+                                                                             ) : (
+                                                                                 <div className="text-center py-8 bg-gray-50 rounded-lg">
+                                                                                     <Target className="mx-auto h-8 w-8 text-gray-400" />
+                                                                                     <p className="mt-2 text-sm text-gray-500">No patrol rounds data available for this period</p>
+                                                                                     <p className="text-xs text-gray-400">The guard may not have any assigned patrol plans or scans</p>
+                                                                                 </div>
+                                                                             )}
+                                                                         </div>
+                                                                     </div>
+                                                                 ))
+                                                             )}
+                                                         </div>
+                                                     </div>
+                                                 )}
+                         
                   
                   
                   

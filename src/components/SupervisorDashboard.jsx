@@ -1451,7 +1451,7 @@ const SupervisorDashboard = () => {
                         {activeTab === 'dashboard' && dashboardData && (
                             <div className="space-y-6">
                                 {/* Period Selector */}
-                                <div className="flex justify-between items-center">
+                                {/* <div className="flex justify-between items-center">
                                     <h2 className="text-xl font-bold text-gray-900">Dashboard Overview</h2>
                                     <div className="flex space-x-2">
                                         <button
@@ -1482,7 +1482,7 @@ const SupervisorDashboard = () => {
                                             Year
                                         </button>
                                     </div>
-                                </div>
+                                </div> */}
 
                                 {/* Stats Grid */}
                                 <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
@@ -1524,76 +1524,7 @@ const SupervisorDashboard = () => {
                                     </div>
                                 </div>
 
-                                {/* Incident Statistics Section */}
-                                <div className="bg-white p-6 rounded-lg shadow">
-                                    <h3 className="text-lg font-medium text-gray-900 mb-4">
-                                        Incident Statistics ({statsPeriod})
-                                    </h3>
-
-                                    {incidentStats ? (
-                                        <div className="space-y-4">
-                                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                                <div className="text-center p-4 bg-blue-50 rounded-lg">
-                                                    <p className="text-2xl font-bold text-blue-600">{incidentStats.total || 0}</p>
-                                                    <p className="text-sm text-blue-600">Total Incidents</p>
-                                                </div>
-
-                                                {incidentStats.statusBreakdown && Object.entries(incidentStats.statusBreakdown).map(([status, count]) => (
-                                                    <div
-                                                        key={status}
-                                                        className={`text-center p-4 rounded-lg ${status === 'resolved' ? 'bg-green-50' :
-                                                                status === 'in-progress' ? 'bg-yellow-50' :
-                                                                    status === 'investigating' ? 'bg-blue-50' :
-                                                                        'bg-red-50'
-                                                            }`}
-                                                    >
-                                                        <p className="text-2xl font-bold text-gray-900">{count}</p>
-                                                        <p className="text-sm text-gray-600 capitalize">{status.replace('-', ' ')}</p>
-                                                    </div>
-                                                ))}
-                                            </div>
-
-                                            {/* Status Breakdown Chart (Simple bar visualization) */}
-                                            {incidentStats.statusBreakdown && (
-                                                <div className="mt-6">
-                                                    <h4 className="text-md font-medium text-gray-900 mb-3">Status Distribution</h4>
-                                                    <div className="space-y-2">
-                                                        {Object.entries(incidentStats.statusBreakdown).map(([status, count]) => {
-                                                            const total = incidentStats.total || 1;
-                                                            const percentage = (count / total) * 100;
-                                                            return (
-                                                                <div key={status} className="flex items-center justify-between">
-                                                                    <span className="text-sm font-medium text-gray-700 capitalize w-32">
-                                                                        {status.replace('-', ' ')}
-                                                                    </span>
-                                                                    <div className="flex-1 mx-4">
-                                                                        <div className="w-full bg-gray-200 rounded-full h-2">
-                                                                            <div
-                                                                                className={`h-2 rounded-full ${status === 'resolved' ? 'bg-green-500' :
-                                                                                        status === 'in-progress' ? 'bg-yellow-500' :
-                                                                                            status === 'investigating' ? 'bg-blue-500' :
-                                                                                                'bg-red-500'
-                                                                                    }`}
-                                                                                style={{ width: `${percentage}%` }}
-                                                                            ></div>
-                                                                        </div>
-                                                                    </div>
-                                                                    <span className="text-sm text-gray-600 w-16 text-right">
-                                                                        {count} ({percentage.toFixed(1)}%)
-                                                                    </span>
-                                                                </div>
-                                                            );
-                                                        })}
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </div>
-                                    ) : (
-                                        <div className="flex justify-center items-center py-8">
-                                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
-                                        </div>
-                                    )}
-                                </div>
+                          {/* ********************************incident stats  notion  */}
 
                                 {/* Quick Actions */}
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -1616,7 +1547,7 @@ const SupervisorDashboard = () => {
                                     </button>
 
                                     <button
-                                        onClick={() => setActiveTab('reports')}
+                                    onClick={() => setActiveTab('guard-reports')}
                                         className="bg-white p-6 rounded-lg shadow hover:shadow-md transition-shadow text-left"
                                     >
                                         <FileText className="w-8 h-8 text-blue-600 mb-2" />
@@ -1815,9 +1746,11 @@ const SupervisorDashboard = () => {
                                                                                     </span>
                                                                                     {assignment.assignedShifts && assignment.assignedShifts.length > 0 && (
                                                                                         <div className="text-xs text-gray-500">
-                                                                                            Shifts: {assignment.assignedShifts.map(shift =>
-                                                                                                shift.shiftName || shift.shiftType || 'Unnamed'
-                                                                                            ).join(', ')}
+                                                                                            Shifts: {assignment.assignedShifts.map(shiftId => {
+                                                                                                // Find the shift object by ID from the shifts state
+                                                                                                const shift = shifts.find(s => s._id === shiftId);
+                                                                                                return shift ? (shift.shiftName || shift.shiftType || 'Unnamed Shift') : 'Loading...';
+                                                                                            }).join(', ')}
                                                                                         </div>
                                                                                     )}
                                                                                 </div>
@@ -1984,9 +1917,9 @@ const SupervisorDashboard = () => {
                                                             <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                                                 Status
                                                             </th>
-                                                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                            {/* <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                                                 Actions
-                                                            </th>
+                                                            </th> */}
                                                         </tr>
                                                     </thead>
                                                     <tbody className="bg-white divide-y divide-gray-200">
@@ -2000,9 +1933,9 @@ const SupervisorDashboard = () => {
                                                                             <div className="text-sm font-medium text-gray-900">
                                                                                 {log.guard?.name || 'Unknown Guard'}
                                                                             </div>
-                                                                            <div className="text-xs text-gray-500">
+                                                                            {/* <div className="text-xs text-gray-500">
                                                                                 ID: {log.guard?._id?.substring(0, 8) || 'N/A'}
-                                                                            </div>
+                                                                            </div> */}
                                                                         </div>
                                                                     </div>
                                                                 </td>
@@ -2031,9 +1964,9 @@ const SupervisorDashboard = () => {
                                                                     <div className="text-sm text-gray-900">
                                                                         {log.patrolPlan?.planName || 'N/A'}
                                                                     </div>
-                                                                    <div className="text-xs text-gray-500">
+                                                                    {/* <div className="text-xs text-gray-500">
                                                                         Plan ID: {log.patrolPlan?._id?.substring(0, 8) || 'N/A'}
-                                                                    </div>
+                                                                    </div> */}
                                                                 </td>
 
                                                                 {/* Shift Column */}
@@ -2466,7 +2399,7 @@ const SupervisorDashboard = () => {
                                                 </div>
 
                                                 {/* Plan Breakdown */}
-                                                {report.roundsPerformance?.planBreakdown && report.roundsPerformance.planBreakdown.length > 0 && (
+                                                {/* {report.roundsPerformance?.planBreakdown && report.roundsPerformance.planBreakdown.length > 0 && (
                                                     <div className="px-6 py-4 border-b bg-white">
                                                         <h4 className="text-md font-medium text-gray-900 mb-3">Plan Breakdown</h4>
                                                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -2496,10 +2429,10 @@ const SupervisorDashboard = () => {
                                                             ))}
                                                         </div>
                                                     </div>
-                                                )}
+                                                )} */}
 
                                                 {/* Progress Summary */}
-                                                <div className="px-6 py-4 border-b bg-green-50">
+                                                {/* <div className="px-6 py-4 border-b bg-green-50">
                                                     <div className="flex items-center justify-between">
                                                         <div>
                                                             <h4 className="text-md font-medium text-gray-900">Progress Summary</h4>
@@ -2514,7 +2447,7 @@ const SupervisorDashboard = () => {
                                                             </span>
                                                         </div>
                                                     </div>
-                                                </div>
+                                                </div> */}
 
                                                 {/* Detailed Rounds Performance Table */}
                                                 <div className="p-6">
@@ -2783,121 +2716,211 @@ const SupervisorDashboard = () => {
                         )}
 
 
-                        {activeTab === 'incidents' && (
-                            <div>
-                                <h2 className="text-2xl font-bold text-gray-900 mb-6">Incidents</h2>
-                                <div className="bg-white shadow overflow-hidden sm:rounded-md">
-                                    {loading ? (
-                                        <div className="flex justify-center items-center py-8">
-                                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
-                                        </div>
-                                    ) : !incidents?.length ? (
-                                        <div className="text-center py-8">
-                                            <AlertTriangle className="mx-auto h-12 w-12 text-gray-400" />
-                                            <h3 className="mt-2 text-sm font-medium text-gray-900">No incidents</h3>
-                                            <p className="mt-1 text-sm text-gray-500">No incidents reported yet.</p>
-                                        </div>
-                                    ) : (
-                                        <ul className="divide-y divide-gray-200">
-                                            {incidents.map((incident) => (
-                                                <li key={incident._id} className="px-4 py-4 hover:bg-gray-50">
-                                                    <div className="flex justify-between">
-                                                        {/* LEFT: Incident Info */}
-                                                        <div className="flex items-start">
-                                                            <AlertTriangle
-                                                                className={`h-8 w-8 mt-1 ${incident.severity === "critical"
-                                                                    ? "text-red-800"
-                                                                    : incident.severity === "high"
-                                                                        ? "text-red-600"
-                                                                        : incident.severity === "medium"
-                                                                            ? "text-yellow-600"
-                                                                            : "text-green-600"
-                                                                    }`}
-                                                            />
-                                                            <div className="ml-4">
-                                                                <div className="text-sm font-medium text-gray-900">{incident.title}</div>
-                                                                <div className="text-sm text-gray-500">
-                                                                    {incident.type} • {incident.severity} • {new Date(incident.createdAt).toLocaleDateString()}
+                    {activeTab === 'incidents' && (
+                        <div>
+                            <h2 className="text-2xl font-bold text-gray-900 mb-6">Incidents</h2>
+                            <div className="bg-white shadow overflow-hidden sm:rounded-lg">
+                                {loading ? (
+                                    <div className="flex justify-center items-center py-8">
+                                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+                                    </div>
+                                ) : !incidents?.length ? (
+                                    <div className="text-center py-8">
+                                        <AlertTriangle className="mx-auto h-12 w-12 text-gray-400" />
+                                        <h3 className="mt-2 text-sm font-medium text-gray-900">No incidents</h3>
+                                        <p className="mt-1 text-sm text-gray-500">No incidents reported yet.</p>
+                                    </div>
+                                ) : (
+                                    <div className="overflow-x-auto">
+                                        <table className="min-w-full divide-y divide-gray-200">
+                                            <thead className="bg-gray-50">
+                                                <tr>
+                                                    {/* <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Incident Details</th> */}
+                                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Guard Information</th>
+                                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Media</th>
+                                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="bg-white divide-y divide-gray-200">
+                                                {incidents.map((incident) => (
+                                                    <tr key={incident._id} className="hover:bg-gray-50">
+                                                        {/* Incident Details */}
+                                                        {/* <td className="px-6 py-4 whitespace-nowrap">
+                                                            <div className="flex items-start">
+                                                                <AlertTriangle
+                                                                    className={`h-6 w-6 mt-1 mr-3 ${incident.severity === "critical"
+                                                                            ? "text-red-800"
+                                                                            : incident.severity === "high"
+                                                                                ? "text-red-600"
+                                                                                : incident.severity === "medium"
+                                                                                    ? "text-yellow-600"
+                                                                                    : "text-green-600"
+                                                                        }`}
+                                                                />
+                                                                <div>
+                                                                    <div className="text-sm font-medium text-gray-900">{incident.title}</div>
+                                                                    <div className="text-sm text-gray-500">
+                                                                        <span className="inline-block bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full mr-2">
+                                                                            {incident.type}
+                                                                        </span>
+                                                                        <span className={`inline-block text-xs px-2 py-1 rounded-full mr-2 ${incident.severity === "critical"
+                                                                                ? "bg-red-100 text-red-800"
+                                                                                : incident.severity === "high"
+                                                                                    ? "bg-orange-100 text-orange-800"
+                                                                                    : incident.severity === "medium"
+                                                                                        ? "bg-yellow-100 text-yellow-800"
+                                                                                        : "bg-green-100 text-green-800"
+                                                                            }`}>
+                                                                            {incident.severity}
+                                                                        </span>
+                                                                    </div>
+                                                                    <div className="text-xs text-gray-400 mt-1">
+                                                                        {new Date(incident.createdAt).toLocaleDateString()} • {new Date(incident.createdAt).toLocaleTimeString()}
+                                                                    </div>
+                                                                    {incident.description && (
+                                                                        <div className="mt-2 text-sm text-gray-700 max-w-xs">{incident.description}</div>
+                                                                    )}
+                                                                    {incident.location?.lat && incident.location?.lng && (
+                                                                        <div className="mt-2">
+                                                                            <a
+                                                                                href={`https://www.google.com/maps?q=${incident.location.lat},${incident.location.lng}`}
+                                                                                target="_blank"
+                                                                                rel="noopener noreferrer"
+                                                                                className="text-xs text-blue-600 hover:text-blue-800 flex items-center"
+                                                                            >
+                                                                                <MapPin className="h-3 w-3 mr-1" />
+                                                                                View Location
+                                                                            </a>
+                                                                        </div>
+                                                                    )}
                                                                 </div>
-                                                                <div className="text-xs text-gray-400">
-                                                                    Reported by: {incident.reportedBy?.name || "Unknown"}
-                                                                </div>
-                                                                {incident.assignedTo?.length > 0 && (
+                                                            </div>
+                                                        </td> */}
+
+                                                        {/* Guard Information */}
+                                                        <td className="px-6 py-4 whitespace-nowrap">
+                                                            <div className="space-y-2">
+                                                                <div>
+                                                                    <div className="text-xs font-medium text-gray-500">Reported By</div>
+                                                                    <div className="text-sm text-gray-900">
+                                                                        {incident.reportedBy?.name || "Unknown"}
+                                                                    </div>
                                                                     <div className="text-xs text-gray-500">
-                                                                        Assigned to: {incident.assignedTo.map((u) => u.name).join(", ")}
+                                                                        {incident.reportedBy?.role || "Guard"}
+                                                                    </div>
+                                                                </div>
+
+                                                                {incident.assignedTo?.length > 0 && (
+                                                                    <div>
+                                                                        <div className="text-xs font-medium text-gray-500">Assigned To</div>
+                                                                        {incident.assignedTo.map((user, index) => (
+                                                                            <div key={index} className="text-sm text-gray-900">
+                                                                                {user.name}
+                                                                                <div className="text-xs text-gray-500">{user.role}</div>
+                                                                            </div>
+                                                                        ))}
                                                                     </div>
                                                                 )}
-                                                                {incident.description && (
-                                                                    <div className="mt-1 text-sm text-gray-700">{incident.description}</div>
-                                                                )}
-                                                                {incident.location?.lat && incident.location?.lng && (
-                                                                    <div className="mt-1 text-xs text-blue-600">
-                                                                        <a
-                                                                            href={`https://www.google.com/maps?q=${incident.location.lat},${incident.location.lng}`}
-                                                                            target="_blank"
-                                                                            rel="noopener noreferrer"
-                                                                        >
-                                                                            View Location on Map
-                                                                        </a>
+
+                                                                {incident.companyId && (
+                                                                    <div>
+                                                                        <div className="text-xs font-medium text-gray-500">Company</div>
+                                                                        <div className="text-sm text-gray-900">
+                                                                            {incident.companyId?.name || "N/A"}
+                                                                        </div>
                                                                     </div>
                                                                 )}
                                                             </div>
-                                                        </div>
+                                                        </td>
 
-                                                        {/* RIGHT: Status Dropdown */}
-                                                        <div className="flex items-center space-x-2">
+                                                        {/* Media Section */}
+                                                        <td className="px-6 py-4">
+                                                            <div className="space-y-3">
+                                                                {/* Photos */}
+                                                                {incident.photos?.length > 0 && (
+                                                                    <div>
+                                                                        <div className="text-xs font-medium text-gray-500 mb-1">Photos ({incident.photos.length})</div>
+                                                                        <div className="flex gap-2 flex-wrap">
+                                                                            {incident.photos.slice(0, 3).map((photo, index) => (
+                                                                                <a
+                                                                                    key={index}
+                                                                                    href={photo}
+                                                                                    target="_blank"
+                                                                                    rel="noopener noreferrer"
+                                                                                    className="block"
+                                                                                >
+                                                                                    <img
+                                                                                        src={photo}
+                                                                                        alt={`Incident photo ${index + 1}`}
+                                                                                        className="h-16 w-16 object-cover rounded border cursor-pointer hover:scale-105 transition-transform"
+                                                                                    />
+                                                                                </a>
+                                                                            ))}
+                                                                            {incident.photos.length > 3 && (
+                                                                                <div className="h-16 w-16 bg-gray-100 rounded border flex items-center justify-center text-xs text-gray-500">
+                                                                                    +{incident.photos.length - 3} more
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+
+                                                                {/* Video */}
+                                                                {incident.video && (
+                                                                    <div>
+                                                                        <div className="text-xs font-medium text-gray-500 mb-1">Video</div>
+                                                                        <video
+                                                                            controls
+                                                                            className="h-16 w-16 object-cover rounded border cursor-pointer"
+                                                                            src={incident.video}
+                                                                            preload="metadata"
+                                                                        >
+                                                                            Your browser does not support the video tag.
+                                                                        </video>
+                                                                    </div>
+                                                                )}
+
+                                                                {!incident.photos?.length && !incident.video && (
+                                                                    <div className="text-xs text-gray-400">No media</div>
+                                                                )}
+                                                            </div>
+                                                        </td>
+
+                                                        {/* Status */}
+                                                        <td className="px-6 py-4 whitespace-nowrap">
                                                             <select
                                                                 value={incident.status}
                                                                 onChange={(e) => updateIncidentStatus(incident._id, e.target.value)}
-                                                                className="text-sm border border-gray-300 rounded-md px-2 py-1 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                                                className={`text-sm border rounded-md px-3 py-2 focus:outline-none focus:ring-1 focus:ring-indigo-500 w-full max-w-32 ${incident.status === "reported"
+                                                                        ? "border-yellow-300 bg-yellow-50"
+                                                                        : incident.status === "investigating"
+                                                                            ? "border-blue-300 bg-blue-50"
+                                                                            : incident.status === "in-progress"
+                                                                                ? "border-orange-300 bg-orange-50"
+                                                                                : incident.status === "resolved"
+                                                                                    ? "border-green-300 bg-green-50"
+                                                                                    : "border-gray-300 bg-gray-50"
+                                                                    }`}
                                                             >
                                                                 <option value="reported">Reported</option>
                                                                 <option value="investigating">Investigating</option>
-                                                                <option value="in-progress">In-Progress</option>
+                                                                <option value="in-progress">In Progress</option>
                                                                 <option value="resolved">Resolved</option>
                                                                 <option value="closed">Closed</option>
                                                             </select>
-                                                        </div>
-                                                    </div>
-
-                                                    {/* MEDIA SECTION */}
-                                                    <div className="mt-3 ml-12 space-y-2">
-                                                        {/* Photos */}
-                                                        {incident.photos?.length > 0 && (
-                                                            <div className="flex flex-wrap gap-2">
-                                                                {incident.photos.map((photo, i) => (
-                                                                    <a key={i} href={photo} target="_blank" rel="noopener noreferrer">
-                                                                        <img
-                                                                            src={photo}
-                                                                            alt={`incident-photo-${i}`}
-                                                                            className="h-32 w-32 object-cover rounded-md border cursor-pointer hover:scale-105 transition-transform"
-                                                                        />
-                                                                    </a>
-                                                                ))}
+                                                            <div className="text-xs text-gray-500 mt-1">
+                                                                Last updated: {new Date(incident.updatedAt).toLocaleDateString()}
                                                             </div>
-                                                        )}
-
-                                                        {/* Video */}
-                                                        {incident.video && (
-                                                            <div className="mt-2">
-                                                                <video
-                                                                    controls
-                                                                    className="w-full max-w-lg rounded-md border"
-                                                                    src={incident.video}
-                                                                >
-                                                                    Your browser does not support the video tag.
-                                                                </video>
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                </li>
-                                            ))}
-                                        </ul>
-                                    )}
-                                </div>
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
                             </div>
-                        )}
-
+                        </div>
+                    )}
 
                     </div>
                 </main>
