@@ -116,6 +116,16 @@ const SupervisorDashboard = () => {
         return moment.utc(utcTimeString).format('MM/DD/YYYY');
     };
 
+ 
+    const formatReportPeriod = (startDate, endDate, totalDays) => {
+        if (!startDate || !endDate) return 'N/A';
+
+        const start = moment.utc(startDate).format('MMM DD');
+        const end = moment.utc(endDate).format('MMM DD');
+
+        return `Period: ${start} - ${end}${totalDays ? ` (${totalDays} days)` : ''}`;
+    };
+    
     // const downloadExcelReport = (report) => {
     //     try {
     //         // Validate report data
@@ -124,10 +134,30 @@ const SupervisorDashboard = () => {
     //             return;
     //         }
 
+    //         // Extract data with proper fallbacks
+    //         const roundsPerformance = report.roundsPerformance || {};
+    //         const summary = roundsPerformance.summary || {};
+    //         const performance = report.performance || {};
+    //         const performanceBreakdown = performance.breakdown || {};
+
+    //         // Calculate actual values from detailed rounds if summary is missing
+    //         const detailedRounds = report.detailedRounds || [];
+    //         const totalScans = summary.totalScans || detailedRounds.length;
+    //         const completedScans = summary.completedScans ||
+    //             detailedRounds.filter(round => round.status === 'completed').length;
+    //         const scanCompletionRate = summary.scanCompletionRate ||
+    //             (totalScans > 0 ? ((completedScans / totalScans) * 100).toFixed(1) + '%' : '0%');
+
+    //         // Calculate rounds data
+    //         const totalRounds = summary.totalExpectedRounds || 0;
+    //         const completedRounds = summary.totalCompletedRounds || 0;
+    //         const roundsCompletionRate = summary.roundsCompletionRate ||
+    //             (totalRounds > 0 ? ((completedRounds / totalRounds) * 100).toFixed(1) + '%' : '0%');
+
     //         // Create workbook
     //         const workbook = XLSX.utils.book_new();
 
-    //         // 1. Summary Sheet
+    //         // 1. Summary Sheet - FIXED DATA
     //         const summaryData = [
     //             ['GUARD PERFORMANCE REPORT'],
     //             [],
@@ -138,14 +168,17 @@ const SupervisorDashboard = () => {
     //             ['Total Days', report.reportPeriod?.totalDays || 0],
     //             [],
     //             ['Performance Overview'],
-    //             ['Overall Score', `${report.performance?.overallScore || '0'}%`],
-    //             ['Performance Rating', report.performance?.rating || 'N/A'],
-    //             ['Efficiency', report.summary?.efficiency || '0%'],
+    //             ['Overall Score', `${performance.overallScore || '0'}%`],
+    //             ['Performance Rating', performance.rating || 'N/A'],
+    //             ['Efficiency', report.summary?.efficiency || roundsCompletionRate || '0%'],
     //             [],
     //             ['Rounds Performance'],
-    //             ['Total Scans', report.roundsPerformance?.summary?.totalScans || 0],
-    //             ['Completed Scans', report.roundsPerformance?.summary?.completedScans || 0],
-    //             ['Scan Completion Rate', `${((report.roundsPerformance?.summary?.completedScans || 0) / (report.roundsPerformance?.summary?.totalScans || 1) * 100).toFixed(1)}%`],
+    //             ['Total Rounds', totalRounds],
+    //             ['Completed Rounds', completedRounds],
+    //             ['Rounds Completion Rate', roundsCompletionRate],
+    //             // ['Total Scans', totalScans],
+    //             ['Completed Scans', completedScans],
+    //             ['Scan Completion Rate', scanCompletionRate],
     //         ];
 
     //         const summarySheet = XLSX.utils.aoa_to_sheet(summaryData);
@@ -162,8 +195,8 @@ const SupervisorDashboard = () => {
 
     //         XLSX.utils.book_append_sheet(workbook, summarySheet, 'Summary');
 
-    //         // 2. Patrol Logs Sheet - EXACTLY as shown in your example
-    //         if (report.detailedRounds && report.detailedRounds.length > 0) {
+    //         // 2. Patrol Logs Sheet
+    //         if (detailedRounds.length > 0) {
     //             const patrolLogsHeader = [
     //                 'Date',
     //                 'Round',
@@ -174,7 +207,7 @@ const SupervisorDashboard = () => {
     //                 'Distance'
     //             ];
 
-    //             const patrolLogsData = report.detailedRounds.map(round => {
+    //             const patrolLogsData = detailedRounds.map(round => {
     //                 // Format date as "Oct 05, 2025"
     //                 const formattedDate = round.date ? moment.utc(round.date).format('MMM DD, YYYY') : 'N/A';
 
@@ -197,17 +230,15 @@ const SupervisorDashboard = () => {
     //                     formattedDate,
     //                     formattedRound,
     //                     round.planName || 'N/A',
-    //                     round.checkpointName || 'N/A', // Single line for checkpoint name
+    //                     round.checkpointName || 'N/A',
     //                     formattedTime,
     //                     formattedStatus,
     //                     formattedDistance
     //                 ];
     //             });
 
-    //             // Create worksheet with header and data
     //             const patrolLogsSheet = XLSX.utils.aoa_to_sheet([patrolLogsHeader, ...patrolLogsData]);
 
-    //             // Set column widths for better readability
     //             patrolLogsSheet['!cols'] = [
     //                 { wch: 15 }, // Date
     //                 { wch: 12 }, // Round
@@ -218,13 +249,8 @@ const SupervisorDashboard = () => {
     //                 { wch: 10 }  // Distance
     //             ];
 
-    //             // Add header style (bold)
-    //             if (!patrolLogsSheet['!rows']) patrolLogsSheet['!rows'] = [];
-    //             patrolLogsSheet['!rows'][0] = { hpt: 20, hpx: 20 }; // Header row height
-
     //             XLSX.utils.book_append_sheet(workbook, patrolLogsSheet, 'Patrol Logs');
     //         } else {
-    //             // Create empty patrol logs sheet with header only
     //             const emptyHeader = [
     //                 ['Date', 'Round', 'Plan Name', 'Checkpoint', 'Actual Time', 'Status', 'Distance'],
     //                 ['No patrol logs available for this period', '', '', '', '', '', '']
@@ -237,15 +263,16 @@ const SupervisorDashboard = () => {
     //             XLSX.utils.book_append_sheet(workbook, emptySheet, 'Patrol Logs');
     //         }
 
-    //         // 3. Performance Metrics Sheet
+    //         // 3. Performance Metrics Sheet - FIXED DATA
     //         const metricsData = [
     //             ['PERFORMANCE METRICS'],
     //             [],
     //             ['Category', 'Score', 'Rating'],
-    //             ['Overall Performance', `${report.performance?.overallScore || '0'}%`, report.performance?.rating || 'N/A'],
-    //             ['Attendance', `${report.performance?.breakdown?.attendanceScore || '0'}%`, getPerformanceRating(report.performance?.breakdown?.attendanceScore)],
-    //             ['Rounds Completion', `${report.performance?.breakdown?.roundsScore || '0'}%`, getPerformanceRating(report.performance?.breakdown?.roundsScore)],
-    //             ['Efficiency', report.summary?.efficiency || '0%', getPerformanceRating(parseInt(report.summary?.efficiency))],
+    //             ['Overall Performance', `${performance.overallScore || '0'}%`, performance.rating || 'N/A'],
+    //             // ['Attendance', `${performanceBreakdown.attendanceScore || '0'}%`, getPerformanceRating(performanceBreakdown.attendanceScore)],
+    //             ['Rounds Completion', `${performanceBreakdown.roundsScore || roundsCompletionRate.replace('%', '')}%`, getPerformanceRating(performanceBreakdown.roundsScore || roundsCompletionRate.replace('%', ''))],
+    //             ['Scan Completion', `${scanCompletionRate}`, getPerformanceRating(scanCompletionRate.replace('%', ''))],
+    //             ['Efficiency', report.summary?.efficiency || roundsCompletionRate || '0%', getPerformanceRating(parseInt(report.summary?.efficiency || roundsCompletionRate.replace('%', '')))],
     //         ];
 
     //         const metricsSheet = XLSX.utils.aoa_to_sheet(metricsData);
@@ -262,29 +289,14 @@ const SupervisorDashboard = () => {
     //         const fileName = `Guard_Performance_Report_${guardName}_${period}.xlsx`;
 
     //         XLSX.writeFile(workbook, fileName);
-    //         toast.success('Report downloaded successfully with patrol logs!');
+    //         toast.success('Report downloaded successfully!');
 
     //     } catch (error) {
     //         console.error('Error downloading report:', error);
     //         toast.error('Failed to download report');
     //     }
     // };
-
-
-
-
-
-
-    // Calculate shift duration properly
     
-    const formatReportPeriod = (startDate, endDate, totalDays) => {
-        if (!startDate || !endDate) return 'N/A';
-
-        const start = moment.utc(startDate).format('MMM DD');
-        const end = moment.utc(endDate).format('MMM DD');
-
-        return `Period: ${start} - ${end}${totalDays ? ` (${totalDays} days)` : ''}`;
-    };
     
     const downloadExcelReport = (report) => {
         try {
@@ -299,53 +311,61 @@ const SupervisorDashboard = () => {
             const summary = roundsPerformance.summary || {};
             const performance = report.performance || {};
             const performanceBreakdown = performance.breakdown || {};
+            const reportPeriod = report.reportPeriod || {};
 
-            // Calculate actual values from detailed rounds if summary is missing
-            const detailedRounds = report.detailedRounds || [];
-            const totalScans = summary.totalScans || detailedRounds.length;
-            const completedScans = summary.completedScans ||
-                detailedRounds.filter(round => round.status === 'completed').length;
+            // Calculate actual values
+            const totalRounds = summary.totalExpectedRounds || 0;
+            const completedRounds = summary.totalCompletedRounds || 0;
+            const totalScans = summary.totalExpectedScans || 0;
+            const completedScans = summary.totalCompletedScans || 0;
+
+            const roundsCompletionRate = summary.roundsCompletionRate ||
+                (totalRounds > 0 ? ((completedRounds / totalRounds) * 100).toFixed(1) + '%' : '0%');
+
             const scanCompletionRate = summary.scanCompletionRate ||
                 (totalScans > 0 ? ((completedScans / totalScans) * 100).toFixed(1) + '%' : '0%');
 
-            // Calculate rounds data
-            const totalRounds = summary.totalExpectedRounds || 0;
-            const completedRounds = summary.totalCompletedRounds || 0;
-            const roundsCompletionRate = summary.roundsCompletionRate ||
-                (totalRounds > 0 ? ((completedRounds / totalRounds) * 100).toFixed(1) + '%' : '0%');
+            // Format dates for display
+            const formatDateForExcel = (dateString) => {
+                if (!dateString) return 'N/A';
+                return moment.utc(dateString).format('MMM DD, YYYY');
+            };
+
+            const reportPeriodDisplay = reportPeriod.startDate && reportPeriod.endDate ?
+                `${formatDateForExcel(reportPeriod.startDate)} - ${formatDateForExcel(reportPeriod.endDate)}` : 'N/A';
 
             // Create workbook
             const workbook = XLSX.utils.book_new();
 
-            // 1. Summary Sheet - FIXED DATA
+            // 1. Summary Sheet - FIXED
             const summaryData = [
                 ['GUARD PERFORMANCE REPORT'],
                 [],
                 ['Basic Information'],
                 ['Guard Name', report.guard?.name || 'N/A'],
                 ['Phone Number', report.guard?.phone || 'N/A'],
-                ['Report Period', `${formatDateTimeForDisplay(report.reportPeriod?.startDate).split(' at')[0]} - ${formatDateTimeForDisplay(report.reportPeriod?.endDate).split(' at')[0]}`],
-                ['Total Days', report.reportPeriod?.totalDays || 0],
+                ['Report Period', reportPeriodDisplay],
+                ['Total Days', reportPeriod.totalDays || 0],
                 [],
                 ['Performance Overview'],
                 ['Overall Score', `${performance.overallScore || '0'}%`],
                 ['Performance Rating', performance.rating || 'N/A'],
-                ['Efficiency', report.summary?.efficiency || roundsCompletionRate || '0%'],
+                ['Efficiency', report.summary?.efficiency || '0%'],
                 [],
                 ['Rounds Performance'],
                 ['Total Rounds', totalRounds],
                 ['Completed Rounds', completedRounds],
                 ['Rounds Completion Rate', roundsCompletionRate],
-                // ['Total Scans', totalScans],
+                ['Total Expected Scans', totalScans],
                 ['Completed Scans', completedScans],
                 ['Scan Completion Rate', scanCompletionRate],
             ];
 
             const summarySheet = XLSX.utils.aoa_to_sheet(summaryData);
 
-            // Style summary sheet - merge title row
+            // Style summary sheet
             if (!summarySheet['!merges']) summarySheet['!merges'] = [];
-            summarySheet['!merges'].push({ s: { r: 0, c: 0 }, e: { r: 0, c: 7 } });
+            summarySheet['!merges'].push({ s: { r: 0, c: 0 }, e: { r: 0, c: 1 } });
 
             // Set column widths for summary sheet
             summarySheet['!cols'] = [
@@ -356,83 +376,112 @@ const SupervisorDashboard = () => {
             XLSX.utils.book_append_sheet(workbook, summarySheet, 'Summary');
 
             // 2. Patrol Logs Sheet
+            const detailedRounds = report.detailedRounds || [];
             if (detailedRounds.length > 0) {
                 const patrolLogsHeader = [
                     'Date',
                     'Round',
                     'Plan Name',
                     'Checkpoint',
+                    'Checkpoint Description',
                     'Actual Time',
                     'Status',
-                    'Distance'
+                    'Distance (m)',
+                    'Verified'
                 ];
 
                 const patrolLogsData = detailedRounds.map(round => {
-                    // Format date as "Oct 05, 2025"
-                    const formattedDate = round.date ? moment.utc(round.date).format('MMM DD, YYYY') : 'N/A';
+                    // Format date consistently
+                    const formattedDate = round.date ?
+                        moment.utc(round.date).format('MMM DD, YYYY') : 'N/A';
 
-                    // Format round as "Round 1", "Round 2", etc.
+                    // Format round number
                     const formattedRound = `Round ${round.roundNumber || 1}`;
 
-                    // Format time as "01:51 AM" (12-hour format without timezone)
+                    // Format time
                     const formattedTime = round.actualTime ?
                         moment.utc(round.actualTime).format('hh:mm A') : 'Not Scanned';
 
-                    // Format status with proper capitalization
+                    // Format status
                     const formattedStatus = round.status ?
                         round.status.charAt(0).toUpperCase() + round.status.slice(1) : 'Pending';
 
-                    // Format distance as "12m"
+                    // Format distance
                     const formattedDistance = round.distanceMeters ?
-                        `${Math.round(round.distanceMeters)}m` : 'N/A';
+                        Math.round(round.distanceMeters) : 'N/A';
+
+                    // Format verification status
+                    const verifiedStatus = round.isVerified !== undefined ?
+                        (round.isVerified ? 'Yes' : 'No') : 'N/A';
 
                     return [
                         formattedDate,
                         formattedRound,
                         round.planName || 'N/A',
                         round.checkpointName || 'N/A',
+                        round.checkpointDescription || 'N/A',
                         formattedTime,
                         formattedStatus,
-                        formattedDistance
+                        formattedDistance,
+                        verifiedStatus
                     ];
                 });
 
                 const patrolLogsSheet = XLSX.utils.aoa_to_sheet([patrolLogsHeader, ...patrolLogsData]);
 
                 patrolLogsSheet['!cols'] = [
-                    { wch: 15 }, // Date
-                    { wch: 12 }, // Round
+                    { wch: 12 }, // Date
+                    { wch: 10 }, // Round
                     { wch: 20 }, // Plan Name
-                    { wch: 25 }, // Checkpoint
-                    { wch: 15 }, // Actual Time
-                    { wch: 12 }, // Status
-                    { wch: 10 }  // Distance
+                    { wch: 20 }, // Checkpoint
+                    { wch: 25 }, // Checkpoint Description
+                    { wch: 12 }, // Actual Time
+                    { wch: 10 }, // Status
+                    { wch: 10 }, // Distance
+                    { wch: 8 }   // Verified
                 ];
 
                 XLSX.utils.book_append_sheet(workbook, patrolLogsSheet, 'Patrol Logs');
             } else {
                 const emptyHeader = [
-                    ['Date', 'Round', 'Plan Name', 'Checkpoint', 'Actual Time', 'Status', 'Distance'],
-                    ['No patrol logs available for this period', '', '', '', '', '', '']
+                    ['Date', 'Round', 'Plan Name', 'Checkpoint', 'Checkpoint Description', 'Actual Time', 'Status', 'Distance', 'Verified'],
+                    ['No patrol logs available for this period', '', '', '', '', '', '', '', '']
                 ];
                 const emptySheet = XLSX.utils.aoa_to_sheet(emptyHeader);
                 emptySheet['!cols'] = [
-                    { wch: 15 }, { wch: 12 }, { wch: 20 },
-                    { wch: 25 }, { wch: 15 }, { wch: 12 }, { wch: 10 }
+                    { wch: 12 }, { wch: 10 }, { wch: 20 },
+                    { wch: 20 }, { wch: 25 }, { wch: 12 },
+                    { wch: 10 }, { wch: 10 }, { wch: 8 }
                 ];
                 XLSX.utils.book_append_sheet(workbook, emptySheet, 'Patrol Logs');
             }
 
-            // 3. Performance Metrics Sheet - FIXED DATA
+            // 3. Performance Metrics Sheet - FIXED
+            const getPerformanceRatingForExcel = (score) => {
+                const numericScore = typeof score === 'string' ?
+                    parseFloat(score.replace('%', '')) : parseFloat(score) || 0;
+                if (numericScore >= 90) return 'Excellent';
+                if (numericScore >= 80) return 'Good';
+                if (numericScore >= 70) return 'Satisfactory';
+                if (numericScore >= 60) return 'Needs Improvement';
+                return 'Poor';
+            };
+
+            const overallScore = parseFloat(performance.overallScore) || 0;
+            const roundsScore = parseFloat(performanceBreakdown.roundsCompletionRate) ||
+                parseFloat(roundsCompletionRate.replace('%', '')) || 0;
+            const scanScore = parseFloat(scanCompletionRate.replace('%', '')) || 0;
+            const efficiencyScore = parseFloat(report.summary?.efficiency?.replace('%', '')) ||
+                parseFloat(roundsCompletionRate.replace('%', '')) || 0;
+
             const metricsData = [
                 ['PERFORMANCE METRICS'],
                 [],
                 ['Category', 'Score', 'Rating'],
-                ['Overall Performance', `${performance.overallScore || '0'}%`, performance.rating || 'N/A'],
-                // ['Attendance', `${performanceBreakdown.attendanceScore || '0'}%`, getPerformanceRating(performanceBreakdown.attendanceScore)],
-                ['Rounds Completion', `${performanceBreakdown.roundsScore || roundsCompletionRate.replace('%', '')}%`, getPerformanceRating(performanceBreakdown.roundsScore || roundsCompletionRate.replace('%', ''))],
-                ['Scan Completion', `${scanCompletionRate}`, getPerformanceRating(scanCompletionRate.replace('%', ''))],
-                ['Efficiency', report.summary?.efficiency || roundsCompletionRate || '0%', getPerformanceRating(parseInt(report.summary?.efficiency || roundsCompletionRate.replace('%', '')))],
+                ['Overall Performance', `${overallScore}%`, getPerformanceRatingForExcel(overallScore)],
+                ['Rounds Completion', `${roundsScore}%`, getPerformanceRatingForExcel(roundsScore)],
+                ['Scan Completion', `${scanScore}%`, getPerformanceRatingForExcel(scanScore)],
+                ['Efficiency', `${efficiencyScore}%`, getPerformanceRatingForExcel(efficiencyScore)],
             ];
 
             const metricsSheet = XLSX.utils.aoa_to_sheet(metricsData);
@@ -443,10 +492,42 @@ const SupervisorDashboard = () => {
             ];
             XLSX.utils.book_append_sheet(workbook, metricsSheet, 'Metrics');
 
+            // 4. Plan Breakdown Sheet (if available)
+            if (roundsPerformance.planBreakdown && roundsPerformance.planBreakdown.length > 0) {
+                const planBreakdownHeader = [
+                    'Plan Name',
+                    'Total Rounds',
+                    'Completed Rounds',
+                    'Total Checkpoints',
+                    'Completed Scans',
+                    'Completion Rate'
+                ];
+
+                const planBreakdownData = roundsPerformance.planBreakdown.map(plan => [
+                    plan.planName || 'N/A',
+                    plan.totalRounds || 0,
+                    plan.completedRounds || 0,
+                    plan.totalCheckpoints || 0,
+                    plan.completedScans || 0,
+                    plan.completionRate || '0%'
+                ]);
+
+                const planBreakdownSheet = XLSX.utils.aoa_to_sheet([planBreakdownHeader, ...planBreakdownData]);
+                planBreakdownSheet['!cols'] = [
+                    { wch: 25 }, // Plan Name
+                    { wch: 12 }, // Total Rounds
+                    { wch: 12 }, // Completed Rounds
+                    { wch: 15 }, // Total Checkpoints
+                    { wch: 15 }, // Completed Scans
+                    { wch: 15 }  // Completion Rate
+                ];
+                XLSX.utils.book_append_sheet(workbook, planBreakdownSheet, 'Plan Breakdown');
+            }
+
             // Generate filename and download
-            const guardName = report.guard?.name?.replace(/\s+/g, '_') || 'Unknown_Guard';
-            const period = new Date().toISOString().split('T')[0];
-            const fileName = `Guard_Performance_Report_${guardName}_${period}.xlsx`;
+            const guardName = report.guard?.name?.replace(/[^a-zA-Z0-9]/g, '_') || 'Unknown_Guard';
+            const timestamp = moment().format('YYYY-MM-DD_HH-mm');
+            const fileName = `Guard_Performance_Report_${guardName}_${timestamp}.xlsx`;
 
             XLSX.writeFile(workbook, fileName);
             toast.success('Report downloaded successfully!');
@@ -456,9 +537,6 @@ const SupervisorDashboard = () => {
             toast.error('Failed to download report');
         }
     };
-    
-    
-    
     
     const calculateShiftDuration = (startTime, endTime) => {
         if (!startTime || !endTime) return 'N/A';
