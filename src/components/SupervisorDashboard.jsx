@@ -126,176 +126,26 @@ const SupervisorDashboard = () => {
         return `Period: ${start} - ${end}${totalDays ? ` (${totalDays} days)` : ''}`;
     };
 
-    // const downloadExcelReport = (report) => {
-    //     try {
-    //         // Validate report data
-    //         if (!report) {
-    //             toast.error('No report data available to download');
-    //             return;
-    //         }
+    // Add these functions near your other functions
 
-    //         // Extract data with proper fallbacks
-    //         const roundsPerformance = report.roundsPerformance || {};
-    //         const summary = roundsPerformance.summary || {};
-    //         const performance = report.performance || {};
-    //         const performanceBreakdown = performance.breakdown || {};
+    // Clear a single report
+    const clearReport = (reportId) => {
+        if (window.confirm('Are you sure you want to clear this report?')) {
+            setGuardReports(prev => prev.filter(report => report.id !== reportId));
+            toast.success('Report clear  successfully');
+        }
+    };
 
-    //         // Calculate actual values from detailed rounds if summary is missing
-    //         const detailedRounds = report.detailedRounds || [];
-    //         const totalScans = summary.totalScans || detailedRounds.length;
-    //         const completedScans = summary.completedScans ||
-    //             detailedRounds.filter(round => round.status === 'completed').length;
-    //         const scanCompletionRate = summary.scanCompletionRate ||
-    //             (totalScans > 0 ? ((completedScans / totalScans) * 100).toFixed(1) + '%' : '0%');
+    // Clear all reports
+    const clearAllReports = () => {
+        if (guardReports.length === 0) return;
 
-    //         // Calculate rounds data
-    //         const totalRounds = summary.totalExpectedRounds || 0;
-    //         const completedRounds = summary.totalCompletedRounds || 0;
-    //         const roundsCompletionRate = summary.roundsCompletionRate ||
-    //             (totalRounds > 0 ? ((completedRounds / totalRounds) * 100).toFixed(1) + '%' : '0%');
+        if (window.confirm(`Are you sure you want to clear all ${guardReports.length} reports? `)) {
+            setGuardReports([]);
+            toast.success('All reports cleared successfully');
+        }
+    };
 
-    //         // Create workbook
-    //         const workbook = XLSX.utils.book_new();
-
-    //         // 1. Summary Sheet - FIXED DATA
-    //         const summaryData = [
-    //             ['GUARD PERFORMANCE REPORT'],
-    //             [],
-    //             ['Basic Information'],
-    //             ['Guard Name', report.guard?.name || 'N/A'],
-    //             ['Phone Number', report.guard?.phone || 'N/A'],
-    //             ['Report Period', `${formatDateTimeForDisplay(report.reportPeriod?.startDate).split(' at')[0]} - ${formatDateTimeForDisplay(report.reportPeriod?.endDate).split(' at')[0]}`],
-    //             ['Total Days', report.reportPeriod?.totalDays || 0],
-    //             [],
-    //             ['Performance Overview'],
-    //             ['Overall Score', `${performance.overallScore || '0'}%`],
-    //             ['Performance Rating', performance.rating || 'N/A'],
-    //             ['Efficiency', report.summary?.efficiency || roundsCompletionRate || '0%'],
-    //             [],
-    //             ['Rounds Performance'],
-    //             ['Total Rounds', totalRounds],
-    //             ['Completed Rounds', completedRounds],
-    //             ['Rounds Completion Rate', roundsCompletionRate],
-    //             // ['Total Scans', totalScans],
-    //             ['Completed Scans', completedScans],
-    //             ['Scan Completion Rate', scanCompletionRate],
-    //         ];
-
-    //         const summarySheet = XLSX.utils.aoa_to_sheet(summaryData);
-
-    //         // Style summary sheet - merge title row
-    //         if (!summarySheet['!merges']) summarySheet['!merges'] = [];
-    //         summarySheet['!merges'].push({ s: { r: 0, c: 0 }, e: { r: 0, c: 7 } });
-
-    //         // Set column widths for summary sheet
-    //         summarySheet['!cols'] = [
-    //             { wch: 25 },
-    //             { wch: 20 }
-    //         ];
-
-    //         XLSX.utils.book_append_sheet(workbook, summarySheet, 'Summary');
-
-    //         // 2. Patrol Logs Sheet
-    //         if (detailedRounds.length > 0) {
-    //             const patrolLogsHeader = [
-    //                 'Date',
-    //                 'Round',
-    //                 'Plan Name',
-    //                 'Checkpoint',
-    //                 'Actual Time',
-    //                 'Status',
-    //                 'Distance'
-    //             ];
-
-    //             const patrolLogsData = detailedRounds.map(round => {
-    //                 // Format date as "Oct 05, 2025"
-    //                 const formattedDate = round.date ? moment.utc(round.date).format('MMM DD, YYYY') : 'N/A';
-
-    //                 // Format round as "Round 1", "Round 2", etc.
-    //                 const formattedRound = `Round ${round.roundNumber || 1}`;
-
-    //                 // Format time as "01:51 AM" (12-hour format without timezone)
-    //                 const formattedTime = round.actualTime ?
-    //                     moment.utc(round.actualTime).format('hh:mm A') : 'Not Scanned';
-
-    //                 // Format status with proper capitalization
-    //                 const formattedStatus = round.status ?
-    //                     round.status.charAt(0).toUpperCase() + round.status.slice(1) : 'Pending';
-
-    //                 // Format distance as "12m"
-    //                 const formattedDistance = round.distanceMeters ?
-    //                     `${Math.round(round.distanceMeters)}m` : 'N/A';
-
-    //                 return [
-    //                     formattedDate,
-    //                     formattedRound,
-    //                     round.planName || 'N/A',
-    //                     round.checkpointName || 'N/A',
-    //                     formattedTime,
-    //                     formattedStatus,
-    //                     formattedDistance
-    //                 ];
-    //             });
-
-    //             const patrolLogsSheet = XLSX.utils.aoa_to_sheet([patrolLogsHeader, ...patrolLogsData]);
-
-    //             patrolLogsSheet['!cols'] = [
-    //                 { wch: 15 }, // Date
-    //                 { wch: 12 }, // Round
-    //                 { wch: 20 }, // Plan Name
-    //                 { wch: 25 }, // Checkpoint
-    //                 { wch: 15 }, // Actual Time
-    //                 { wch: 12 }, // Status
-    //                 { wch: 10 }  // Distance
-    //             ];
-
-    //             XLSX.utils.book_append_sheet(workbook, patrolLogsSheet, 'Patrol Logs');
-    //         } else {
-    //             const emptyHeader = [
-    //                 ['Date', 'Round', 'Plan Name', 'Checkpoint', 'Actual Time', 'Status', 'Distance'],
-    //                 ['No patrol logs available for this period', '', '', '', '', '', '']
-    //             ];
-    //             const emptySheet = XLSX.utils.aoa_to_sheet(emptyHeader);
-    //             emptySheet['!cols'] = [
-    //                 { wch: 15 }, { wch: 12 }, { wch: 20 },
-    //                 { wch: 25 }, { wch: 15 }, { wch: 12 }, { wch: 10 }
-    //             ];
-    //             XLSX.utils.book_append_sheet(workbook, emptySheet, 'Patrol Logs');
-    //         }
-
-    //         // 3. Performance Metrics Sheet - FIXED DATA
-    //         const metricsData = [
-    //             ['PERFORMANCE METRICS'],
-    //             [],
-    //             ['Category', 'Score', 'Rating'],
-    //             ['Overall Performance', `${performance.overallScore || '0'}%`, performance.rating || 'N/A'],
-    //             // ['Attendance', `${performanceBreakdown.attendanceScore || '0'}%`, getPerformanceRating(performanceBreakdown.attendanceScore)],
-    //             ['Rounds Completion', `${performanceBreakdown.roundsScore || roundsCompletionRate.replace('%', '')}%`, getPerformanceRating(performanceBreakdown.roundsScore || roundsCompletionRate.replace('%', ''))],
-    //             ['Scan Completion', `${scanCompletionRate}`, getPerformanceRating(scanCompletionRate.replace('%', ''))],
-    //             ['Efficiency', report.summary?.efficiency || roundsCompletionRate || '0%', getPerformanceRating(parseInt(report.summary?.efficiency || roundsCompletionRate.replace('%', '')))],
-    //         ];
-
-    //         const metricsSheet = XLSX.utils.aoa_to_sheet(metricsData);
-    //         metricsSheet['!cols'] = [
-    //             { wch: 25 },
-    //             { wch: 15 },
-    //             { wch: 15 }
-    //         ];
-    //         XLSX.utils.book_append_sheet(workbook, metricsSheet, 'Metrics');
-
-    //         // Generate filename and download
-    //         const guardName = report.guard?.name?.replace(/\s+/g, '_') || 'Unknown_Guard';
-    //         const period = new Date().toISOString().split('T')[0];
-    //         const fileName = `Guard_Performance_Report_${guardName}_${period}.xlsx`;
-
-    //         XLSX.writeFile(workbook, fileName);
-    //         toast.success('Report downloaded successfully!');
-
-    //     } catch (error) {
-    //         console.error('Error downloading report:', error);
-    //         toast.error('Failed to download report');
-    //     }
-    // };
 
 
     const downloadExcelReport = (report) => {
@@ -2318,10 +2168,20 @@ const SupervisorDashboard = () => {
                     )}
                     {/* Guard Reports Tab */}
                     {/* Guard Reports Tab */}
+                    {/* GUARD REPORTS SECTION */}
                     {activeTab === 'guard-reports' && (
                         <div>
                             <div className="flex justify-between items-center mb-6">
                                 <h2 className="text-2xl font-bold text-gray-900">Guard Performance Reports</h2>
+                                {guardReports.length > 0 && (
+                                    <button
+                                        onClick={clearAllReports}
+                                        className="flex items-center px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700"
+                                    >
+                                        <Trash2 className="w-4 h-4 mr-2" />
+                                        Clear All Reports ({guardReports.length})
+                                    </button>
+                                )}
                             </div>
 
                             {/* Report Generator */}
@@ -2408,8 +2268,8 @@ const SupervisorDashboard = () => {
                                     </div>
                                 ) : (
                                     guardReports.map((report, index) => (
-                                        <div key={index} className="bg-white rounded-lg shadow overflow-hidden">
-                                            {/* Report Header */}
+                                        <div key={report.id || index} className="bg-white rounded-lg shadow overflow-hidden">
+                                            {/* Report Header with Delete Button */}
                                             <div className="bg-gray-50 px-6 py-4 border-b">
                                                 <div className="flex justify-between items-center">
                                                     <div>
@@ -2426,6 +2286,9 @@ const SupervisorDashboard = () => {
                                                         <p className="text-sm text-gray-500">
                                                             Phone: {report.guard?.phone}
                                                         </p>
+                                                        <p className="text-xs text-gray-400">
+                                                            Generated: {moment(report.generatedAt).format('MMM DD, YYYY h:mm A')}
+                                                        </p>
                                                     </div>
                                                     <div className="flex items-center space-x-3">
                                                         <div className="text-right">
@@ -2439,18 +2302,29 @@ const SupervisorDashboard = () => {
                                                                 {report.performance?.rating || 'Overall Score'}
                                                             </div>
                                                         </div>
-                                                        <button
-                                                            onClick={() => downloadExcelReport(report)}
-                                                            className="flex items-center px-3 py-2 text-sm text-white bg-green-600 border border-green-700 rounded-md hover:bg-green-700"
-                                                        >
-                                                            <Download className="w-4 h-4 mr-1" />
-                                                            Excel
-                                                        </button>
+                                                        <div className="flex space-x-2">
+                                                            <button
+                                                                onClick={() => downloadExcelReport(report)}
+                                                                className="flex items-center px-3 py-2 text-sm text-white bg-green-600 border border-green-700 rounded-md hover:bg-green-700"
+                                                                title="Download Excel Report"
+                                                            >
+                                                                <Download className="w-4 h-4 mr-1" />
+                                                                Excel
+                                                            </button>
+                                                            <button
+                                                                onClick={() => clearReport(report.id)}
+                                                                className="flex items-center px-3 py-2 text-sm text-white bg-red-600 border border-red-700 rounded-md hover:bg-red-700"
+                                                                title="Delete Report"
+                                                            >
+                                                                <Trash2 className="w-4 h-4 mr-1" />
+                                                               clear
+                                                            </button>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>
 
-                                            {/* Performance Summary */}
+                                            {/* Rest of your report content remains the same */}
                                             <div className="px-6 py-4 border-b bg-indigo-50">
                                                 <h4 className="text-md font-medium text-gray-900 mb-3">Performance Summary</h4>
                                                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -2483,57 +2357,6 @@ const SupervisorDashboard = () => {
                                                     </div>
                                                 </div>
                                             </div>
-
-                                            {/* Plan Breakdown */}
-                                            {/* {report.roundsPerformance?.planBreakdown && report.roundsPerformance.planBreakdown.length > 0 && (
-                                                    <div className="px-6 py-4 border-b bg-white">
-                                                        <h4 className="text-md font-medium text-gray-900 mb-3">Plan Breakdown</h4>
-                                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                                            {report.roundsPerformance.planBreakdown.map((plan, idx) => (
-                                                                <div key={idx} className="bg-white border border-gray-200 rounded-lg p-4">
-                                                                    <h5 className="font-medium text-gray-900 mb-2">{plan.planName}</h5>
-                                                                    <div className="space-y-2 text-sm">
-                                                                        <div className="flex justify-between">
-                                                                            <span className="text-gray-600">Rounds:</span>
-                                                                            <span className="font-medium">{plan.completedRounds}/{plan.totalRounds}</span>
-                                                                        </div>
-                                                                        <div className="flex justify-between">
-                                                                            <span className="text-gray-600">Scans:</span>
-                                                                            <span className="font-medium">{plan.completedScans}/{plan.totalRounds * plan.totalCheckpoints}</span>
-                                                                        </div>
-                                                                        <div className="flex justify-between">
-                                                                            <span className="text-gray-600">Completion:</span>
-                                                                            <span className={`font-medium ${parseFloat(plan.completionRate) >= 80 ? 'text-green-600' :
-                                                                                parseFloat(plan.completionRate) >= 60 ? 'text-yellow-600' :
-                                                                                    'text-red-600'
-                                                                                }`}>
-                                                                                {plan.completionRate}
-                                                                            </span>
-                                                                        </div>
-                                                                    </div>
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    </div>
-                                                )} */}
-
-                                            {/* Progress Summary */}
-                                            {/* <div className="px-6 py-4 border-b bg-green-50">
-                                                    <div className="flex items-center justify-between">
-                                                        <div>
-                                                            <h4 className="text-md font-medium text-gray-900">Progress Summary</h4>
-                                                            <p className="text-sm text-gray-600 mt-1">{report.summary?.progress}</p>
-                                                        </div>
-                                                        <div className="text-right">
-                                                            <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${report.summary?.status === 'Good' ? 'bg-green-100 text-green-800' :
-                                                                report.summary?.status === 'Needs Improvement' ? 'bg-yellow-100 text-yellow-800' :
-                                                                    'bg-red-100 text-red-800'
-                                                                }`}>
-                                                                {report.summary?.status}
-                                                            </span>
-                                                        </div>
-                                                    </div>
-                                                </div> */}
 
                                             {/* Detailed Rounds Performance Table */}
                                             <div className="p-6">
@@ -2576,7 +2399,7 @@ const SupervisorDashboard = () => {
                                                                 {report.detailedRounds.map((round, idx) => (
                                                                     <tr key={idx} className="hover:bg-gray-50">
                                                                         <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                                                                            {moment.utc(round.date).format('MMM DD, YYYY')}
+                                                                            {formatDateTimeForDisplay(round.date).split(' ').slice(0, 3).join(' ')}
                                                                         </td>
                                                                         <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
                                                                             Round {round.roundNumber}
@@ -2625,7 +2448,6 @@ const SupervisorDashboard = () => {
                             </div>
                         </div>
                     )}
-
 
 
 

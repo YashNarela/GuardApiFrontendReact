@@ -97,7 +97,25 @@ const EmployeeDashboard = () => {
         const phoneRegex = /^\d{10}$/;
         return phoneRegex.test(phone.replace(/\D/g, ''));
     };
+    // Add these functions near your other functions
 
+    // Clear a single report
+    const clearReport = (reportId) => {
+        if (window.confirm('Are you sure you want to clear this report?')) {
+            setGuardReports(prev => prev.filter(report => report.id !== reportId));
+            toast.success('Report deleted successfully');
+        }
+    };
+
+    // Clear all reports
+    const clearAllReports = () => {
+        if (guardReports.length === 0) return;
+
+        if (window.confirm(`Are you sure you want to clear all ${guardReports.length} reports? `)) {
+            setGuardReports([]);
+            toast.success('All reports cleared successfully');
+        }
+    };
 
     const downloadExcelReport = (report) => {
         try {
@@ -349,7 +367,7 @@ const EmployeeDashboard = () => {
     };
 
 
-   // Convert local datetime to UTC for backend
+    // Convert local datetime to UTC for backend
     const localToUTCDateTime = (localTimeString) => {
         if (!localTimeString) return '';
 
@@ -377,18 +395,18 @@ const EmployeeDashboard = () => {
         return moment.utc(utcTimeString).format('MM/DD/YYYY');
     };
 
-      const calculateShiftDuration = (startTime, endTime) => {
-            if (!startTime || !endTime) return 'N/A';
-    
-            const start = moment.utc(startTime);
-            const end = moment.utc(endTime);
-            const duration = moment.duration(end.diff(start));
-    
-            const hours = Math.floor(duration.asHours());
-            const minutes = duration.minutes();
-    
-            return `${hours}h ${minutes}m`;
-        };
+    const calculateShiftDuration = (startTime, endTime) => {
+        if (!startTime || !endTime) return 'N/A';
+
+        const start = moment.utc(startTime);
+        const end = moment.utc(endTime);
+        const duration = moment.duration(end.diff(start));
+
+        const hours = Math.floor(duration.asHours());
+        const minutes = duration.minutes();
+
+        return `${hours}h ${minutes}m`;
+    };
     // Generate guard performance report
     const handleGenerateReport = async () => {
         if (!selectedGuard) {
@@ -478,10 +496,28 @@ const EmployeeDashboard = () => {
         fetchShifts(); // Add this line
     }, []);
 
+
+
     useEffect(() => {
         if (activeTab !== 'dashboard' && activeTab !== 'guard-reports') {
             fetchTabData();
         }
+        // Specifically handle guards tab
+        if (activeTab === 'guards') {
+            // If guards array is empty, fetch them
+            if (guards.length === 0) {
+                fetchGuards();
+            }
+        }
+
+        // Handle guard-reports tab to ensure guards are loaded for dropdown
+        if (activeTab === 'guard-reports' && guards.length === 0) {
+            fetchGuards();
+        }
+
+
+
+
     }, [activeTab, searchGuard]);
 
     const fetchDashboardData = async () => {
@@ -849,7 +885,44 @@ const EmployeeDashboard = () => {
             }
             reset(itemWithoutPassword); // Reset with data that excludes password
         } else {
-            reset();
+
+            const emptyValues = {};
+
+            switch (type) {
+                case 'supervisor':
+                    emptyValues.name = '';
+                    emptyValues.email = '';
+                    emptyValues.phone = '';
+                    emptyValues.password = '';
+                    break;
+                case 'guard':
+                    emptyValues.name = '';
+                    emptyValues.phone = '';
+                    emptyValues.password = '';
+                    break;
+                case 'qr':
+                    emptyValues.siteId = '';
+                    emptyValues.description = '';
+                    emptyValues.lat = '';
+                    emptyValues.lng = '';
+                    emptyValues.radius = '';
+                    break;
+                case 'shift':
+                    emptyValues.guardId = '';
+                    emptyValues.shiftType = '';
+                    emptyValues.startTime = '';
+                    emptyValues.endTime = '';
+                    break;
+                default:
+                    break;
+            }
+
+            reset(emptyValues);
+
+
+
+
+            // reset();
         }
     };
 
@@ -940,7 +1013,7 @@ const EmployeeDashboard = () => {
             </header>
 
 
-      
+
 
             <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
                 <div className="px-4 py-6 sm:px-0">
@@ -1411,147 +1484,147 @@ const EmployeeDashboard = () => {
                                                     ))}
                                                 </tbody> */}
 
-                                                    <tbody className="bg-white divide-y divide-gray-200">
-                                                        {patrolPlans.map((plan) => {
-                                                            const showAllGuards = plan.assignedGuards?.length > 3;
-                                                            const showAllCheckpoints = plan.checkpoints?.length > 3;
+                                                <tbody className="bg-white divide-y divide-gray-200">
+                                                    {patrolPlans.map((plan) => {
+                                                        const showAllGuards = plan.assignedGuards?.length > 3;
+                                                        const showAllCheckpoints = plan.checkpoints?.length > 3;
 
-                                                            const displayedGuards = expandedPlanGuards.has(plan._id)
-                                                                ? plan.assignedGuards
-                                                                : plan.assignedGuards?.slice(0, 3);
+                                                        const displayedGuards = expandedPlanGuards.has(plan._id)
+                                                            ? plan.assignedGuards
+                                                            : plan.assignedGuards?.slice(0, 3);
 
-                                                            const displayedCheckpoints = expandedPlanCheckpoints.has(plan._id)
-                                                                ? plan.checkpoints
-                                                                : plan.checkpoints?.slice(0, 3);
+                                                        const displayedCheckpoints = expandedPlanCheckpoints.has(plan._id)
+                                                            ? plan.checkpoints
+                                                            : plan.checkpoints?.slice(0, 3);
 
-                                                            return (
-                                                                <tr key={plan._id} className="hover:bg-gray-50">
-                                                                    <td className="px-6 py-4">
-                                                                        <div className="flex items-start space-x-3">
-                                                                            <div className="flex-1 min-w-0">
-                                                                                <div className="flex items-center space-x-2">
-                                                                                    <h3 className="text-sm font-semibold text-gray-900 truncate">
-                                                                                        {plan.planName}
-                                                                                    </h3>
-                                                                                    <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
-                                                                                        {plan.rounds} round{plan.rounds !== 1 ? 's' : ''}
-                                                                                    </span>
-                                                                                </div>
-                                                                                <p className="text-sm text-gray-500 mt-1 line-clamp-2">
-                                                                                    {plan.description || 'No description available'}
-                                                                                </p>
-                                                                                <div className="mt-2 text-xs text-gray-400">
-                                                                                    Updated: {moment(plan.updatedAt).format('MMM DD, YYYY h:mm A')}
-                                                                                </div>
+                                                        return (
+                                                            <tr key={plan._id} className="hover:bg-gray-50">
+                                                                <td className="px-6 py-4">
+                                                                    <div className="flex items-start space-x-3">
+                                                                        <div className="flex-1 min-w-0">
+                                                                            <div className="flex items-center space-x-2">
+                                                                                <h3 className="text-sm font-semibold text-gray-900 truncate">
+                                                                                    {plan.planName}
+                                                                                </h3>
+                                                                                <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                                                                                    {plan.rounds} round{plan.rounds !== 1 ? 's' : ''}
+                                                                                </span>
+                                                                            </div>
+                                                                            <p className="text-sm text-gray-500 mt-1 line-clamp-2">
+                                                                                {plan.description || 'No description available'}
+                                                                            </p>
+                                                                            <div className="mt-2 text-xs text-gray-400">
+                                                                                Updated: {moment(plan.updatedAt).format('MMM DD, YYYY h:mm A')}
                                                                             </div>
                                                                         </div>
-                                                                    </td>
+                                                                    </div>
+                                                                </td>
 
-                                                                    <td className="px-6 py-4 whitespace-nowrap">
-                                                                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${plan.isActive
-                                                                                ? 'bg-green-100 text-green-800'
-                                                                                : 'bg-gray-100 text-gray-800'
-                                                                            }`}>
-                                                                            {plan.isActive ? 'Active' : 'Inactive'}
-                                                                        </span>
-                                                                    </td>
+                                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${plan.isActive
+                                                                        ? 'bg-green-100 text-green-800'
+                                                                        : 'bg-gray-100 text-gray-800'
+                                                                        }`}>
+                                                                        {plan.isActive ? 'Active' : 'Inactive'}
+                                                                    </span>
+                                                                </td>
 
-                                                                    <td className="px-6 py-4">
-                                                                        <div className="text-sm text-gray-900 space-y-1">
-                                                                            <div className="capitalize">
-                                                                                <span className="font-medium">Frequency:</span> {plan.frequency}
-                                                                            </div>
-                                                                            {plan.frequency === 'custom' && plan.customFrequency?.days && (
-                                                                                <div className="text-xs text-gray-600">
-                                                                                    Days: {plan.customFrequency.days.join(', ')}
-                                                                                </div>
-                                                                            )}
-                                                                            <div className="text-xs text-gray-500">
-                                                                                {moment(plan.startDate).format('MMM DD, YYYY')}
-                                                                                {plan.endDate ? ` - ${moment(plan.endDate).format('MMM DD, YYYY')}` : ' - No end date'}
-                                                                            </div>
+                                                                <td className="px-6 py-4">
+                                                                    <div className="text-sm text-gray-900 space-y-1">
+                                                                        <div className="capitalize">
+                                                                            <span className="font-medium">Frequency:</span> {plan.frequency}
                                                                         </div>
-                                                                    </td>
+                                                                        {plan.frequency === 'custom' && plan.customFrequency?.days && (
+                                                                            <div className="text-xs text-gray-600">
+                                                                                Days: {plan.customFrequency.days.join(', ')}
+                                                                            </div>
+                                                                        )}
+                                                                        <div className="text-xs text-gray-500">
+                                                                            {moment(plan.startDate).format('MMM DD, YYYY')}
+                                                                            {plan.endDate ? ` - ${moment(plan.endDate).format('MMM DD, YYYY')}` : ' - No end date'}
+                                                                        </div>
+                                                                    </div>
+                                                                </td>
 
-                                                                    {/* Guards Column with Expandable Feature */}
-                                                                    <td className="px-6 py-4">
-                                                                        <div className="space-y-2">
-                                                                            {displayedGuards && displayedGuards.length > 0 ? (
-                                                                                <>
-                                                                                    {displayedGuards.map((assignment, index) => (
-                                                                                        <div key={index} className="flex items-center space-x-2 text-sm">
-                                                                                            <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                                                                                            <span className="font-medium text-gray-900">
-                                                                                                {assignment.guardId?.name || 'Unknown Guard'}
+                                                                {/* Guards Column with Expandable Feature */}
+                                                                <td className="px-6 py-4">
+                                                                    <div className="space-y-2">
+                                                                        {displayedGuards && displayedGuards.length > 0 ? (
+                                                                            <>
+                                                                                {displayedGuards.map((assignment, index) => (
+                                                                                    <div key={index} className="flex items-center space-x-2 text-sm">
+                                                                                        <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                                                                                        <span className="font-medium text-gray-900">
+                                                                                            {assignment.guardId?.name || 'Unknown Guard'}
+                                                                                        </span>
+                                                                                        {assignment.guardId?.phone && (
+                                                                                            <span className="text-gray-500 text-xs">
+                                                                                                ({assignment.guardId.phone})
                                                                                             </span>
-                                                                                            {assignment.guardId?.phone && (
-                                                                                                <span className="text-gray-500 text-xs">
-                                                                                                    ({assignment.guardId.phone})
-                                                                                                </span>
-                                                                                            )}
-                                                                                        </div>
-                                                                                    ))}
-                                                                                    {showAllGuards && !expandedPlanGuards.has(plan._id) && (
-                                                                                        <button
-                                                                                            onClick={() => togglePlanGuardsExpansion(plan._id)}
-                                                                                            className="text-xs text-blue-600 font-medium hover:text-blue-800 transition-colors"
-                                                                                        >
-                                                                                            +{plan.assignedGuards.length - 3} more guards
-                                                                                        </button>
-                                                                                    )}
-                                                                                    {expandedPlanGuards.has(plan._id) && (
-                                                                                        <button
-                                                                                            onClick={() => togglePlanGuardsExpansion(plan._id)}
-                                                                                            className="text-xs text-gray-600 font-medium hover:text-gray-800 transition-colors"
-                                                                                        >
-                                                                                            Show less
-                                                                                        </button>
-                                                                                    )}
-                                                                                </>
-                                                                            ) : (
-                                                                                <span className="text-sm text-gray-400 italic">No guards assigned</span>
-                                                                            )}
-                                                                        </div>
-                                                                    </td>
+                                                                                        )}
+                                                                                    </div>
+                                                                                ))}
+                                                                                {showAllGuards && !expandedPlanGuards.has(plan._id) && (
+                                                                                    <button
+                                                                                        onClick={() => togglePlanGuardsExpansion(plan._id)}
+                                                                                        className="text-xs text-blue-600 font-medium hover:text-blue-800 transition-colors"
+                                                                                    >
+                                                                                        +{plan.assignedGuards.length - 3} more guards
+                                                                                    </button>
+                                                                                )}
+                                                                                {expandedPlanGuards.has(plan._id) && (
+                                                                                    <button
+                                                                                        onClick={() => togglePlanGuardsExpansion(plan._id)}
+                                                                                        className="text-xs text-gray-600 font-medium hover:text-gray-800 transition-colors"
+                                                                                    >
+                                                                                        Show less
+                                                                                    </button>
+                                                                                )}
+                                                                            </>
+                                                                        ) : (
+                                                                            <span className="text-sm text-gray-400 italic">No guards assigned</span>
+                                                                        )}
+                                                                    </div>
+                                                                </td>
 
-                                                                    {/* Checkpoints Column with Expandable Feature */}
-                                                                    <td className="px-6 py-4">
-                                                                        <div className="text-sm text-gray-900">
-                                                                            <div className="font-medium mb-2">
-                                                                                {plan.checkpoints?.length || 0} checkpoint{(plan.checkpoints?.length || 0) !== 1 ? 's' : ''}
-                                                                            </div>
-                                                                            {displayedCheckpoints && displayedCheckpoints.map((checkpoint, index) => (
-                                                                                <div key={index} className="text-xs text-gray-600 flex items-center space-x-1 mb-1">
-                                                                                    <div className={`w-2 h-2 rounded-full ${checkpoint.isActive ? 'bg-green-500' : 'bg-gray-300'
-                                                                                        }`}></div>
-                                                                                    <span className="truncate">
-                                                                                        {checkpoint.qrId?.siteId || 'Unknown Site'}
-                                                                                        {checkpoint.sequence && ` (#${checkpoint.sequence})`}
-                                                                                    </span>
-                                                                                </div>
-                                                                            ))}
-                                                                            {showAllCheckpoints && !expandedPlanCheckpoints.has(plan._id) && (
-                                                                                <button
-                                                                                    onClick={() => togglePlanCheckpointsExpansion(plan._id)}
-                                                                                    className="text-xs text-blue-600 font-medium hover:text-blue-800 transition-colors"
-                                                                                >
-                                                                                    +{plan.checkpoints.length - 3} more checkpoints
-                                                                                </button>
-                                                                            )}
-                                                                            {expandedPlanCheckpoints.has(plan._id) && (
-                                                                                <button
-                                                                                    onClick={() => togglePlanCheckpointsExpansion(plan._id)}
-                                                                                    className="text-xs text-gray-600 font-medium hover:text-gray-800 transition-colors"
-                                                                                >
-                                                                                    Show less
-                                                                                </button>
-                                                                            )}
+                                                                {/* Checkpoints Column with Expandable Feature */}
+                                                                <td className="px-6 py-4">
+                                                                    <div className="text-sm text-gray-900">
+                                                                        <div className="font-medium mb-2">
+                                                                            {plan.checkpoints?.length || 0} checkpoint{(plan.checkpoints?.length || 0) !== 1 ? 's' : ''}
                                                                         </div>
-                                                                    </td>
-                                                                </tr>
-                                                            );
-                                                        })}
-                                                    </tbody>
+                                                                        {displayedCheckpoints && displayedCheckpoints.map((checkpoint, index) => (
+                                                                            <div key={index} className="text-xs text-gray-600 flex items-center space-x-1 mb-1">
+                                                                                <div className={`w-2 h-2 rounded-full ${checkpoint.isActive ? 'bg-green-500' : 'bg-gray-300'
+                                                                                    }`}></div>
+                                                                                <span className="truncate">
+                                                                                    {checkpoint.qrId?.siteId || 'Unknown Site'}
+                                                                                    {checkpoint.sequence && ` (#${checkpoint.sequence})`}
+                                                                                </span>
+                                                                            </div>
+                                                                        ))}
+                                                                        {showAllCheckpoints && !expandedPlanCheckpoints.has(plan._id) && (
+                                                                            <button
+                                                                                onClick={() => togglePlanCheckpointsExpansion(plan._id)}
+                                                                                className="text-xs text-blue-600 font-medium hover:text-blue-800 transition-colors"
+                                                                            >
+                                                                                +{plan.checkpoints.length - 3} more checkpoints
+                                                                            </button>
+                                                                        )}
+                                                                        {expandedPlanCheckpoints.has(plan._id) && (
+                                                                            <button
+                                                                                onClick={() => togglePlanCheckpointsExpansion(plan._id)}
+                                                                                className="text-xs text-gray-600 font-medium hover:text-gray-800 transition-colors"
+                                                                            >
+                                                                                Show less
+                                                                            </button>
+                                                                        )}
+                                                                    </div>
+                                                                </td>
+                                                            </tr>
+                                                        );
+                                                    })}
+                                                </tbody>
                                             </table>
                                         </div>
                                     ) : (
@@ -1568,35 +1641,35 @@ const EmployeeDashboard = () => {
 
                     {/* INCIDENTS */}
                     {activeTab === 'incidents' && (
-                                         <div>
-                                             <h2 className="text-2xl font-bold text-gray-900 mb-6">Incidents</h2>
-                                             <div className="bg-white shadow overflow-hidden sm:rounded-lg">
-                                                 {loading ? (
-                                                     <div className="flex justify-center items-center py-8">
-                                                         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
-                                                     </div>
-                                                 ) : !incidents?.length ? (
-                                                     <div className="text-center py-8">
-                                                         <AlertTriangle className="mx-auto h-12 w-12 text-gray-400" />
-                                                         <h3 className="mt-2 text-sm font-medium text-gray-900">No incidents</h3>
-                                                         <p className="mt-1 text-sm text-gray-500">No incidents reported yet.</p>
-                                                     </div>
-                                                 ) : (
-                                                     <div className="overflow-x-auto">
-                                                         <table className="min-w-full divide-y divide-gray-200">
-                                                             <thead className="bg-gray-50">
-                                                                 <tr>
-                                                                     {/* <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Incident Details</th> */}
-                                                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Guard Information</th>
-                                                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Media</th>
-                                                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                                                                 </tr>
-                                                             </thead>
-                                                             <tbody className="bg-white divide-y divide-gray-200">
-                                                                 {incidents.map((incident) => (
-                                                                     <tr key={incident._id} className="hover:bg-gray-50">
-                                                                         {/* Incident Details */}
-                                                                         {/* <td className="px-6 py-4 whitespace-nowrap">
+                        <div>
+                            <h2 className="text-2xl font-bold text-gray-900 mb-6">Incidents</h2>
+                            <div className="bg-white shadow overflow-hidden sm:rounded-lg">
+                                {loading ? (
+                                    <div className="flex justify-center items-center py-8">
+                                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+                                    </div>
+                                ) : !incidents?.length ? (
+                                    <div className="text-center py-8">
+                                        <AlertTriangle className="mx-auto h-12 w-12 text-gray-400" />
+                                        <h3 className="mt-2 text-sm font-medium text-gray-900">No incidents</h3>
+                                        <p className="mt-1 text-sm text-gray-500">No incidents reported yet.</p>
+                                    </div>
+                                ) : (
+                                    <div className="overflow-x-auto">
+                                        <table className="min-w-full divide-y divide-gray-200">
+                                            <thead className="bg-gray-50">
+                                                <tr>
+                                                    {/* <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Incident Details</th> */}
+                                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Guard Information</th>
+                                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Media</th>
+                                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="bg-white divide-y divide-gray-200">
+                                                {incidents.map((incident) => (
+                                                    <tr key={incident._id} className="hover:bg-gray-50">
+                                                        {/* Incident Details */}
+                                                        {/* <td className="px-6 py-4 whitespace-nowrap">
                                                                              <div className="flex items-start">
                                                                                  <AlertTriangle
                                                                                      className={`h-6 w-6 mt-1 mr-3 ${incident.severity === "critical"
@@ -1647,473 +1720,447 @@ const EmployeeDashboard = () => {
                                                                                  </div>
                                                                              </div>
                                                                          </td> */}
-                 
-                                                                         {/* Guard Information */}
-                                                                         <td className="px-6 py-4 whitespace-nowrap">
-                                                                             <div className="space-y-2">
-                                                                                 <div>
-                                                                                     <div className="text-xs font-medium text-gray-500">Reported By</div>
-                                                                                     <div className="text-sm text-gray-900">
-                                                                                         {incident.reportedBy?.name || "Unknown"}
-                                                                                     </div>
-                                                                                     <div className="text-xs text-gray-500">
-                                                                                         {incident.reportedBy?.role || "Guard"}
-                                                                                     </div>
-                                                                                 </div>
-                 
-                                                                                 {incident.assignedTo?.length > 0 && (
-                                                                                     <div>
-                                                                                         <div className="text-xs font-medium text-gray-500">Assigned To</div>
-                                                                                         {incident.assignedTo.map((user, index) => (
-                                                                                             <div key={index} className="text-sm text-gray-900">
-                                                                                                 {user.name}
-                                                                                                 <div className="text-xs text-gray-500">{user.role}</div>
-                                                                                             </div>
-                                                                                         ))}
-                                                                                     </div>
-                                                                                 )}
-                 
-                                                                                 {incident.companyId && (
-                                                                                     <div>
-                                                                                         <div className="text-xs font-medium text-gray-500">Company</div>
-                                                                                         <div className="text-sm text-gray-900">
-                                                                                             {incident.companyId?.name || "N/A"}
-                                                                                         </div>
-                                                                                     </div>
-                                                                                 )}
-     <div>
-                                                                     <div className="text-xs font-medium text-gray-500">Reported At</div>
-                                                                     <div className="text-sm text-gray-900">
-                                                                         {moment(incident.createdAt).format('MMM DD, YYYY')}
-                                                                     </div>
-                                                                     <div className="text-xs text-gray-500">
-                                                                         {moment(incident.createdAt).format('h:mm A')}
-                                                                     </div>
 
-                                                                                     <div className="space-y-2">
-                                                                                         <div>
-                                                                                             <div className="text-xs font-medium text-gray-500">Location</div>
-                                                                                             <div className="text-sm text-gray-900">
-                                                                                                 {incident.siteInfo?.siteId || incident.qrId?.siteId || "N/A"}
-                                                                                             </div>
-                                                                                         </div>
+                                                        {/* Guard Information */}
+                                                        <td className="px-6 py-4 whitespace-nowrap">
+                                                            <div className="space-y-2">
+                                                                <div>
+                                                                    <div className="text-xs font-medium text-gray-500">Reported By</div>
+                                                                    <div className="text-sm text-gray-900">
+                                                                        {incident.reportedBy?.name || "Unknown"}
+                                                                    </div>
+                                                                    <div className="text-xs text-gray-500">
+                                                                        {incident.reportedBy?.role || "Guard"}
+                                                                    </div>
+                                                                </div>
 
+                                                                {incident.assignedTo?.length > 0 && (
+                                                                    <div>
+                                                                        <div className="text-xs font-medium text-gray-500">Assigned To</div>
+                                                                        {incident.assignedTo.map((user, index) => (
+                                                                            <div key={index} className="text-sm text-gray-900">
+                                                                                {user.name}
+                                                                                <div className="text-xs text-gray-500">{user.role}</div>
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                )}
 
+                                                                {incident.companyId && (
+                                                                    <div>
+                                                                        <div className="text-xs font-medium text-gray-500">Company</div>
+                                                                        <div className="text-sm text-gray-900">
+                                                                            {incident.companyId?.name || "N/A"}
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+                                                                <div>
+                                                                    <div className="text-xs font-medium text-gray-500">Reported At</div>
+                                                                    <div className="text-sm text-gray-900">
+                                                                        {moment(incident.createdAt).format('MMM DD, YYYY')}
+                                                                    </div>
+                                                                    <div className="text-xs text-gray-500">
+                                                                        {moment(incident.createdAt).format('h:mm A')}
+                                                                    </div>
+
+                                                                    <div className="space-y-2">
+                                                                        <div>
+                                                                            <div className="text-xs font-medium text-gray-500">Location</div>
+                                                                            <div className="text-sm text-gray-900">
+                                                                                {incident.siteInfo?.siteId || incident.qrId?.siteId || "N/A"}
+                                                                            </div>
+                                                                        </div>
 
 
 
 
-                                                                                     </div>
-
- 
-
-                                                                 </div>
 
 
-                                                                             </div>
-                                                                         </td>
-                 
-                                                                         {/* Media Section */}
-                                                                         <td className="px-6 py-4">
-                                                                             <div className="space-y-3">
-                                                                                 {/* Photos */}
-                                                                                 {incident.photos?.length > 0 && (
-                                                                                     <div>
-                                                                                         <div className="text-xs font-medium text-gray-500 mb-1">Photos ({incident.photos.length})</div>
-                                                                                         <div className="flex gap-2 flex-wrap">
-                                                                                             {incident.photos.slice(0, 3).map((photo, index) => (
-                                                                                                 <a
-                                                                                                     key={index}
-                                                                                                     href={photo}
-                                                                                                     target="_blank"
-                                                                                                     rel="noopener noreferrer"
-                                                                                                     className="block"
-                                                                                                 >
-                                                                                                     <img
-                                                                                                         src={photo}
-                                                                                                         alt={`Incident photo ${index + 1}`}
-                                                                                                         className="h-16 w-16 object-cover rounded border cursor-pointer hover:scale-105 transition-transform"
-                                                                                                     />
-                                                                                                 </a>
-                                                                                             ))}
-                                                                                             {incident.photos.length > 3 && (
-                                                                                                 <div className="h-16 w-16 bg-gray-100 rounded border flex items-center justify-center text-xs text-gray-500">
-                                                                                                     +{incident.photos.length - 3} more
-                                                                                                 </div>
-                                                                                             )}
-                                                                                         </div>
-                                                                                     </div>
-                                                                                 )}
-                 
-                                                                                 {/* Video */}
-                                                                                 {incident.video && (
-                                                                                     <div>
-                                                                                         <div className="text-xs font-medium text-gray-500 mb-1">Video</div>
-                                                                                         <video
-                                                                                             controls
-                                                                                             className="h-16 w-16 object-cover rounded border cursor-pointer"
-                                                                                             src={incident.video}
-                                                                                             preload="metadata"
-                                                                                         >
-                                                                                             Your browser does not support the video tag.
-                                                                                         </video>
-                                                                                     </div>
-                                                                                 )}
-                 
-                                                                                 {!incident.photos?.length && !incident.video && (
-                                                                                     <div className="text-xs text-gray-400">No media</div>
-                                                                                 )}
-                                                                             </div>
-                                                                         </td>
-                 
-                                                                         {/* Status */}
-                                                                         <td className="px-6 py-4 whitespace-nowrap">
-                                                                             <select
-                                                                                 value={incident.status}
-                                                                                 onChange={(e) => updateIncidentStatus(incident._id, e.target.value)}
-                                                                                 className={`text-sm border rounded-md px-3 py-2 focus:outline-none focus:ring-1 focus:ring-indigo-500 w-full max-w-32 ${incident.status === "reported"
-                                                                                         ? "border-yellow-300 bg-yellow-50"
-                                                                                         : incident.status === "investigating"
-                                                                                             ? "border-blue-300 bg-blue-50"
-                                                                                             : incident.status === "in-progress"
-                                                                                                 ? "border-orange-300 bg-orange-50"
-                                                                                                 : incident.status === "resolved"
-                                                                                                     ? "border-green-300 bg-green-50"
-                                                                                                     : "border-gray-300 bg-gray-50"
-                                                                                     }`}
-                                                                             >
-                                                                                 <option value="reported">Reported</option>
-                                                                                 <option value="investigating">Investigating</option>
-                                                                                 <option value="in-progress">In Progress</option>
-                                                                                 <option value="resolved">Resolved</option>
-                                                                                 <option value="closed">Closed</option>
-                                                                             </select>
-                                                                             <div className="text-xs text-gray-500 mt-1">
-                                                                                 Last updated: {moment(incident.updatedAt).format('MMM DD, YYYY h:mm A')}
-                                                                             </div>
-                                                                         </td>
-                                                                     </tr>
-                                                                 ))}
-                                                             </tbody>
-                                                         </table>
-                                                     </div>
-                                                 )}
-                                             </div>
-                                         </div>
-                                     )}
+                                                                    </div>
+
+
+
+                                                                </div>
+
+
+                                                            </div>
+                                                        </td>
+
+                                                        {/* Media Section */}
+                                                        <td className="px-6 py-4">
+                                                            <div className="space-y-3">
+                                                                {/* Photos */}
+                                                                {incident.photos?.length > 0 && (
+                                                                    <div>
+                                                                        <div className="text-xs font-medium text-gray-500 mb-1">Photos ({incident.photos.length})</div>
+                                                                        <div className="flex gap-2 flex-wrap">
+                                                                            {incident.photos.slice(0, 3).map((photo, index) => (
+                                                                                <a
+                                                                                    key={index}
+                                                                                    href={photo}
+                                                                                    target="_blank"
+                                                                                    rel="noopener noreferrer"
+                                                                                    className="block"
+                                                                                >
+                                                                                    <img
+                                                                                        src={photo}
+                                                                                        alt={`Incident photo ${index + 1}`}
+                                                                                        className="h-16 w-16 object-cover rounded border cursor-pointer hover:scale-105 transition-transform"
+                                                                                    />
+                                                                                </a>
+                                                                            ))}
+                                                                            {incident.photos.length > 3 && (
+                                                                                <div className="h-16 w-16 bg-gray-100 rounded border flex items-center justify-center text-xs text-gray-500">
+                                                                                    +{incident.photos.length - 3} more
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+
+                                                                {/* Video */}
+                                                                {incident.video && (
+                                                                    <div>
+                                                                        <div className="text-xs font-medium text-gray-500 mb-1">Video</div>
+                                                                        <video
+                                                                            controls
+                                                                            className="h-16 w-16 object-cover rounded border cursor-pointer"
+                                                                            src={incident.video}
+                                                                            preload="metadata"
+                                                                        >
+                                                                            Your browser does not support the video tag.
+                                                                        </video>
+                                                                    </div>
+                                                                )}
+
+                                                                {!incident.photos?.length && !incident.video && (
+                                                                    <div className="text-xs text-gray-400">No media</div>
+                                                                )}
+                                                            </div>
+                                                        </td>
+
+                                                        {/* Status */}
+                                                        <td className="px-6 py-4 whitespace-nowrap">
+                                                            <select
+                                                                value={incident.status}
+                                                                onChange={(e) => updateIncidentStatus(incident._id, e.target.value)}
+                                                                className={`text-sm border rounded-md px-3 py-2 focus:outline-none focus:ring-1 focus:ring-indigo-500 w-full max-w-32 ${incident.status === "reported"
+                                                                    ? "border-yellow-300 bg-yellow-50"
+                                                                    : incident.status === "investigating"
+                                                                        ? "border-blue-300 bg-blue-50"
+                                                                        : incident.status === "in-progress"
+                                                                            ? "border-orange-300 bg-orange-50"
+                                                                            : incident.status === "resolved"
+                                                                                ? "border-green-300 bg-green-50"
+                                                                                : "border-gray-300 bg-gray-50"
+                                                                    }`}
+                                                            >
+                                                                <option value="reported">Reported</option>
+                                                                <option value="investigating">Investigating</option>
+                                                                <option value="in-progress">In Progress</option>
+                                                                <option value="resolved">Resolved</option>
+                                                                <option value="closed">Closed</option>
+                                                            </select>
+                                                            <div className="text-xs text-gray-500 mt-1">
+                                                                Last updated: {moment(incident.updatedAt).format('MMM DD, YYYY h:mm A')}
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
 
                     {/* GUARD REPORTS SECTION */}
-                             {activeTab === 'guard-reports' && (
-                                                     <div>
-                                                         <div className="flex justify-between items-center mb-6">
-                                                             <h2 className="text-2xl font-bold text-gray-900">Guard Performance Reports</h2>
-                                                         </div>
-                         
-                                                         {/* Report Generator */}
-                                                         <div className="bg-white p-6 rounded-lg shadow mb-6">
-                                                             <h3 className="text-lg font-medium text-gray-900 mb-4">Generate Performance Report</h3>
-                                                             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
-                                                                 <div>
-                                                                     <label className="block text-sm font-medium text-gray-700 mb-1">Select Guard</label>
-                                                                     <select
-                                                                         value={selectedGuard}
-                                                                         onChange={(e) => setSelectedGuard(e.target.value)}
-                                                                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                                                                     >
-                                                                         <option value="">Choose a guard</option>
-                                                                         {guards.filter(guard => guard.isActive).map(guard => (
-                                                                             <option key={guard._id} value={guard._id}>
-                                                                                 {guard.name}
-                                                                             </option>
-                                                                         ))}
-                                                                     </select>
-                                                                 </div>
-                                                                 <div>
-                                                                     <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
-                                                                     <input
-                                                                         type="date"
-                                                                         value={reportFilters.startDate}
-                                                                         onChange={(e) => setReportFilters(prev => ({ ...prev, startDate: e.target.value }))}
-                                                                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                                                                     />
-                                                                 </div>
-                                                                 <div>
-                                                                     <label className="block text-sm font-medium text-gray-700 mb-1">End Date</label>
-                                                                     <input
-                                                                         type="date"
-                                                                         value={reportFilters.endDate}
-                                                                         onChange={(e) => setReportFilters(prev => ({ ...prev, endDate: e.target.value }))}
-                                                                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                                                                     />
-                                                                 </div>
-                                                                 <div>
-                                                                     <label className="block text-sm font-medium text-gray-700 mb-1">Shift (Optional)</label>
-                                                                     <select
-                                                                         value={reportFilters.shiftId}
-                                                                         onChange={(e) => setReportFilters(prev => ({ ...prev, shiftId: e.target.value }))}
-                                                                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                                                                     >
-                                                                         <option value="">All Shifts</option>
-                                                                         {shifts.map(shift => (
-                                                                             <option key={shift._id} value={shift._id}>
-                                                                                 {shift.shiftName || shift.shiftType}
-                                                                             </option>
-                                                                         ))}
-                                                                     </select>
-                                                                 </div>
-                                                             </div>
-                                                             <button
-                                                                 onClick={handleGenerateReport}
-                                                                 disabled={!selectedGuard || generatingReport}
-                                                                 className="flex items-center px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                                                             >
-                                                                 {generatingReport ? (
-                                                                     <>
-                                                                         <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                                                                         Generating...
-                                                                     </>
-                                                                 ) : (
-                                                                     <>
-                                                                         <FileText className="w-4 h-4 mr-2" />
-                                                                         Generate Report
-                                                                     </>
-                                                                 )}
-                                                             </button>
-                                                         </div>
-                         
-                                                         {/* Reports List */}
-                                                         <div className="space-y-6">
-                                                             {guardReports.length === 0 ? (
-                                                                 <div className="text-center py-12 bg-white rounded-lg shadow">
-                                                                     <FileText className="mx-auto h-16 w-16 text-gray-400" />
-                                                                     <h3 className="mt-4 text-lg font-medium text-gray-900">No reports generated</h3>
-                                                                     <p className="mt-2 text-sm text-gray-500">
-                                                                         Generate a performance report to see guard analytics and metrics.
-                                                                     </p>
-                                                                 </div>
-                                                             ) : (
-                                                                 guardReports.map((report, index) => (
-                                                                     <div key={index} className="bg-white rounded-lg shadow overflow-hidden">
-                                                                         {/* Report Header */}
-                                                                         <div className="bg-gray-50 px-6 py-4 border-b">
-                                                                             <div className="flex justify-between items-center">
-                                                                                 <div>
-                                                                                     <h3 className="text-lg font-medium text-gray-900">
-                                                                                         {report.guard?.name || 'Unknown Guard'} - Performance Report
-                                                                                     </h3>
-                                                                                     <p className="text-sm text-gray-500">
-                                                                                         {formatReportPeriod(
-                                                                                             report.reportPeriod?.startDate,
-                                                                                             report.reportPeriod?.endDate,
-                                                                                             report.reportPeriod?.totalDays
-                                                                                         )}
-                                                                                     </p>
-                                                                                     <p className="text-sm text-gray-500">
-                                                                                         Phone: {report.guard?.phone}
-                                                                                     </p>
-                                                                                 </div>
-                                                                                 <div className="flex items-center space-x-3">
-                                                                                     <div className="text-right">
-                                                                                         <div className={`text-2xl font-bold ${parseFloat(report.performance?.overallScore || '0') >= 80 ? 'text-green-600' :
-                                                                                             parseFloat(report.performance?.overallScore || '0') >= 60 ? 'text-yellow-600' :
-                                                                                                 'text-red-600'
-                                                                                             }`}>
-                                                                                             {report.performance?.overallScore || '0'}%
-                                                                                         </div>
-                                                                                         <div className="text-xs text-gray-500">
-                                                                                             {report.performance?.rating || 'Overall Score'}
-                                                                                         </div>
-                                                                                     </div>
-                                                                                     <button
-                                                                                         onClick={() => downloadExcelReport(report)}
-                                                                                         className="flex items-center px-3 py-2 text-sm text-white bg-green-600 border border-green-700 rounded-md hover:bg-green-700"
-                                                                                     >
-                                                                                         <Download className="w-4 h-4 mr-1" />
-                                                                                         Excel
-                                                                                     </button>
-                                                                                 </div>
-                                                                             </div>
-                                                                         </div>
-                         
-                                                                         {/* Performance Summary */}
-                                                                         <div className="px-6 py-4 border-b bg-indigo-50">
-                                                                             <h4 className="text-md font-medium text-gray-900 mb-3">Performance Summary</h4>
-                                                                             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                                                                 <div className="text-center">
-                                                                                     <div className="text-lg font-bold text-blue-600">
-                                                                                         {report.roundsPerformance?.summary?.totalCompletedRounds || 0}/{report.roundsPerformance?.summary?.totalExpectedRounds || 0}
-                                                                                     </div>
-                                                                                     <div className="text-sm text-gray-600">Rounds Completed</div>
-                                                                                 </div>
-                                                                                 <div className="text-center">
-                                                                                     <div className="text-lg font-bold text-purple-600">
-                                                                                         {report.roundsPerformance?.summary?.totalCompletedScans || 0}/{report.roundsPerformance?.summary?.totalExpectedScans || 0}
-                                                                                     </div>
-                                                                                     <div className="text-sm text-gray-600">Scans Completed</div>
-                                                                                 </div>
-                                                                                 <div className="text-center">
-                                                                                     <div className={`text-lg font-bold ${parseFloat(report.roundsPerformance?.summary?.roundsCompletionRate) >= 80 ? 'text-green-600' :
-                                                                                         parseFloat(report.roundsPerformance?.summary?.roundsCompletionRate) >= 60 ? 'text-yellow-600' :
-                                                                                             'text-red-600'
-                                                                                         }`}>
-                                                                                         {report.roundsPerformance?.summary?.roundsCompletionRate || '0%'}
-                                                                                     </div>
-                                                                                     <div className="text-sm text-gray-600">Rounds Completion</div>
-                                                                                 </div>
-                                                                                 <div className="text-center">
-                                                                                     <div className="text-lg font-bold text-indigo-600">
-                                                                                         {report.summary?.efficiency || '0%'}
-                                                                                     </div>
-                                                                                     <div className="text-sm text-gray-600">Overall Efficiency</div>
-                                                                                 </div>
-                                                                             </div>
-                                                                         </div>
-                         
-                                                                         {/* Plan Breakdown */}
-                                                                         {/* {report.roundsPerformance?.planBreakdown && report.roundsPerformance.planBreakdown.length > 0 && (
-                                                                             <div className="px-6 py-4 border-b bg-white">
-                                                                                 <h4 className="text-md font-medium text-gray-900 mb-3">Plan Breakdown</h4>
-                                                                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                                                                     {report.roundsPerformance.planBreakdown.map((plan, idx) => (
-                                                                                         <div key={idx} className="bg-white border border-gray-200 rounded-lg p-4">
-                                                                                             <h5 className="font-medium text-gray-900 mb-2">{plan.planName}</h5>
-                                                                                             <div className="space-y-2 text-sm">
-                                                                                                 <div className="flex justify-between">
-                                                                                                     <span className="text-gray-600">Rounds:</span>
-                                                                                                     <span className="font-medium">{plan.completedRounds}/{plan.totalRounds}</span>
-                                                                                                 </div>
-                                                                                                 <div className="flex justify-between">
-                                                                                                     <span className="text-gray-600">Scans:</span>
-                                                                                                     <span className="font-medium">{plan.completedScans}/{plan.totalRounds * plan.totalCheckpoints}</span>
-                                                                                                 </div>
-                                                                                                 <div className="flex justify-between">
-                                                                                                     <span className="text-gray-600">Completion:</span>
-                                                                                                     <span className={`font-medium ${parseFloat(plan.completionRate) >= 80 ? 'text-green-600' :
-                                                                                                         parseFloat(plan.completionRate) >= 60 ? 'text-yellow-600' :
-                                                                                                             'text-red-600'
-                                                                                                         }`}>
-                                                                                                         {plan.completionRate}
-                                                                                                     </span>
-                                                                                                 </div>
-                                                                                             </div>
-                                                                                         </div>
-                                                                                     ))}
-                                                                                 </div>
-                                                                             </div>
-                                                                         )} */}
-                         
-                                                                         {/* Progress Summary */}
-                                                                         {/* <div className="px-6 py-4 border-b bg-green-50">
-                                                                             <div className="flex items-center justify-between">
-                                                                                 <div>
-                                                                                     <h4 className="text-md font-medium text-gray-900">Progress Summary</h4>
-                                                                                     <p className="text-sm text-gray-600 mt-1">{report.summary?.progress}</p>
-                                                                                 </div>
-                                                                                 <div className="text-right">
-                                                                                     <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${report.summary?.status === 'Good' ? 'bg-green-100 text-green-800' :
-                                                                                         report.summary?.status === 'Needs Improvement' ? 'bg-yellow-100 text-yellow-800' :
-                                                                                             'bg-red-100 text-red-800'
-                                                                                         }`}>
-                                                                                         {report.summary?.status}
-                                                                                     </span>
-                                                                                 </div>
-                                                                             </div>
-                                                                         </div> */}
-                         
-                                                                         {/* Detailed Rounds Performance Table */}
-                                                                         <div className="p-6">
-                                                                             <div className="flex justify-between items-center mb-4">
-                                                                                 <h4 className="text-md font-medium text-gray-900">Detailed Patrol Rounds</h4>
-                                                                                 <div className="text-sm text-gray-500">
-                                                                                     Total Records: {report.detailedRounds?.length || 0}
-                                                                                 </div>
-                                                                             </div>
-                         
-                                                                             {report.detailedRounds && report.detailedRounds.length > 0 ? (
-                                                                                 <div className="overflow-x-auto">
-                                                                                     <table className="min-w-full divide-y divide-gray-200">
-                                                                                         <thead className="bg-gray-50">
-                                                                                             <tr>
-                                                                                                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                                                                     Date
-                                                                                                 </th>
-                                                                                                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                                                                     Round
-                                                                                                 </th>
-                                                                                                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                                                                     Plan Name
-                                                                                                 </th>
-                                                                                                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                                                                     Checkpoint
-                                                                                                 </th>
-                                                                                                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                                                                     Actual Time
-                                                                                                 </th>
-                                                                                                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                                                                     Status
-                                                                                                 </th>
-                                                                                                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                                                                     Distance
-                                                                                                 </th>
-                                                                                             </tr>
-                                                                                         </thead>
-                                                                                         <tbody className="bg-white divide-y divide-gray-200">
-                                                                                             {report.detailedRounds.map((round, idx) => (
-                                                                                                 <tr key={idx} className="hover:bg-gray-50">
-                                                                                                     <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                                                                                                         {formatDateTimeForDisplay(round.date).split(' ').slice(0, 3).join(' ')}
-                                                                                                     </td>
-                                                                                                     <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                                                                                                         Round {round.roundNumber}
-                                                                                                     </td>
-                                                                                                     <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 font-medium">
-                                                                                                         {round.planName || 'N/A'}
-                                                                                                     </td>
-                                                                                                     <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                                                                                                         <div>
-                                                                                                             <div className="font-medium">{round.checkpointName}</div>
-                                                                                                             {round.checkpointDescription && (
-                                                                                                                 <div className="text-xs text-gray-400">{round.checkpointDescription}</div>
-                                                                                                             )}
-                                                                                                         </div>
-                                                                                                     </td>
-                                                                                                     <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                                                                                                         {round.actualTime ? formatTimeForDisplay(round.actualTime).split(' ').slice(0, 2).join(' ') : 'Not Scanned'}
-                                                                                                     </td>
-                                                                                                     <td className="px-4 py-3 whitespace-nowrap">
-                                                                                                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${round.status === 'completed' ? 'bg-green-100 text-green-800' :
-                                                                                                             round.status === 'missed' ? 'bg-red-100 text-red-800' :
-                                                                                                                 'bg-gray-100 text-gray-800'
-                                                                                                             }`}>
-                                                                                                             {round.status ? round.status.charAt(0).toUpperCase() + round.status.slice(1) : 'Pending'}
-                                                                                                         </span>
-                                                                                                     </td>
-                                                                                                     <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                                                                                                         {round.distanceMeters ? `${round.distanceMeters}m` : 'N/A'}
-                                                                                                     </td>
-                                                                                                 </tr>
-                                                                                             ))}
-                                                                                         </tbody>
-                                                                                     </table>
-                                                                                 </div>
-                                                                             ) : (
-                                                                                 <div className="text-center py-8 bg-gray-50 rounded-lg">
-                                                                                     <Target className="mx-auto h-8 w-8 text-gray-400" />
-                                                                                     <p className="mt-2 text-sm text-gray-500">No patrol rounds data available for this period</p>
-                                                                                     <p className="text-xs text-gray-400">The guard may not have any assigned patrol plans or scans</p>
-                                                                                 </div>
-                                                                             )}
-                                                                         </div>
-                                                                     </div>
-                                                                 ))
-                                                             )}
-                                                         </div>
-                                                     </div>
-                                                 )}
-                         
-                  
-                  
-                  
+                    {/* GUARD REPORTS SECTION */}
+                    {activeTab === 'guard-reports' && (
+                        <div>
+                            <div className="flex justify-between items-center mb-6">
+                                <h2 className="text-2xl font-bold text-gray-900">Guard Performance Reports</h2>
+                                {guardReports.length > 0 && (
+                                    <button
+                                        onClick={clearAllReports}
+                                        className="flex items-center px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700"
+                                    >
+                                        <Trash2 className="w-4 h-4 mr-2" />
+                                        Clear All Reports ({guardReports.length})
+                                    </button>
+                                )}
+                            </div>
+
+                            {/* Report Generator */}
+                            <div className="bg-white p-6 rounded-lg shadow mb-6">
+                                <h3 className="text-lg font-medium text-gray-900 mb-4">Generate Performance Report</h3>
+                                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Select Guard</label>
+                                        <select
+                                            value={selectedGuard}
+                                            onChange={(e) => setSelectedGuard(e.target.value)}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                                        >
+                                            <option value="">Choose a guard</option>
+                                            {guards.filter(guard => guard.isActive).map(guard => (
+                                                <option key={guard._id} value={guard._id}>
+                                                    {guard.name}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
+                                        <input
+                                            type="date"
+                                            value={reportFilters.startDate}
+                                            onChange={(e) => setReportFilters(prev => ({ ...prev, startDate: e.target.value }))}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">End Date</label>
+                                        <input
+                                            type="date"
+                                            value={reportFilters.endDate}
+                                            onChange={(e) => setReportFilters(prev => ({ ...prev, endDate: e.target.value }))}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Shift (Optional)</label>
+                                        <select
+                                            value={reportFilters.shiftId}
+                                            onChange={(e) => setReportFilters(prev => ({ ...prev, shiftId: e.target.value }))}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                                        >
+                                            <option value="">All Shifts</option>
+                                            {shifts.map(shift => (
+                                                <option key={shift._id} value={shift._id}>
+                                                    {shift.shiftName || shift.shiftType}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={handleGenerateReport}
+                                    disabled={!selectedGuard || generatingReport}
+                                    className="flex items-center px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    {generatingReport ? (
+                                        <>
+                                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                            Generating...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <FileText className="w-4 h-4 mr-2" />
+                                            Generate Report
+                                        </>
+                                    )}
+                                </button>
+                            </div>
+
+                            {/* Reports List */}
+                            <div className="space-y-6">
+                                {guardReports.length === 0 ? (
+                                    <div className="text-center py-12 bg-white rounded-lg shadow">
+                                        <FileText className="mx-auto h-16 w-16 text-gray-400" />
+                                        <h3 className="mt-4 text-lg font-medium text-gray-900">No reports generated</h3>
+                                        <p className="mt-2 text-sm text-gray-500">
+                                            Generate a performance report to see guard analytics and metrics.
+                                        </p>
+                                    </div>
+                                ) : (
+                                    guardReports.map((report, index) => (
+                                        <div key={report.id || index} className="bg-white rounded-lg shadow overflow-hidden">
+                                            {/* Report Header with Delete Button */}
+                                            <div className="bg-gray-50 px-6 py-4 border-b">
+                                                <div className="flex justify-between items-center">
+                                                    <div>
+                                                        <h3 className="text-lg font-medium text-gray-900">
+                                                            {report.guard?.name || 'Unknown Guard'} - Performance Report
+                                                        </h3>
+                                                        <p className="text-sm text-gray-500">
+                                                            {formatReportPeriod(
+                                                                report.reportPeriod?.startDate,
+                                                                report.reportPeriod?.endDate,
+                                                                report.reportPeriod?.totalDays
+                                                            )}
+                                                        </p>
+                                                        <p className="text-sm text-gray-500">
+                                                            Phone: {report.guard?.phone}
+                                                        </p>
+                                                        <p className="text-xs text-gray-400">
+                                                            Generated: {moment(report.generatedAt).format('MMM DD, YYYY h:mm A')}
+                                                        </p>
+                                                    </div>
+                                                    <div className="flex items-center space-x-3">
+                                                        <div className="text-right">
+                                                            <div className={`text-2xl font-bold ${parseFloat(report.performance?.overallScore || '0') >= 80 ? 'text-green-600' :
+                                                                parseFloat(report.performance?.overallScore || '0') >= 60 ? 'text-yellow-600' :
+                                                                    'text-red-600'
+                                                                }`}>
+                                                                {report.performance?.overallScore || '0'}%
+                                                            </div>
+                                                            <div className="text-xs text-gray-500">
+                                                                {report.performance?.rating || 'Overall Score'}
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex space-x-2">
+                                                            <button
+                                                                onClick={() => downloadExcelReport(report)}
+                                                                className="flex items-center px-3 py-2 text-sm text-white bg-green-600 border border-green-700 rounded-md hover:bg-green-700"
+                                                                title="Download Excel Report"
+                                                            >
+                                                                <Download className="w-4 h-4 mr-1" />
+                                                                Excel
+                                                            </button>
+                                                            <button
+                                                                onClick={() => clearReport(report.id)}
+                                                                className="flex items-center px-3 py-2 text-sm text-white bg-red-600 border border-red-700 rounded-md hover:bg-red-700"
+                                                                title="Delete Report"
+                                                            >
+                                                                <Trash2 className="w-4 h-4 mr-1" />
+
+                                                                Clear
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Rest of your report content remains the same */}
+                                            <div className="px-6 py-4 border-b bg-indigo-50">
+                                                <h4 className="text-md font-medium text-gray-900 mb-3">Performance Summary</h4>
+                                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                                    <div className="text-center">
+                                                        <div className="text-lg font-bold text-blue-600">
+                                                            {report.roundsPerformance?.summary?.totalCompletedRounds || 0}/{report.roundsPerformance?.summary?.totalExpectedRounds || 0}
+                                                        </div>
+                                                        <div className="text-sm text-gray-600">Rounds Completed</div>
+                                                    </div>
+                                                    <div className="text-center">
+                                                        <div className="text-lg font-bold text-purple-600">
+                                                            {report.roundsPerformance?.summary?.totalCompletedScans || 0}/{report.roundsPerformance?.summary?.totalExpectedScans || 0}
+                                                        </div>
+                                                        <div className="text-sm text-gray-600">Scans Completed</div>
+                                                    </div>
+                                                    <div className="text-center">
+                                                        <div className={`text-lg font-bold ${parseFloat(report.roundsPerformance?.summary?.roundsCompletionRate) >= 80 ? 'text-green-600' :
+                                                            parseFloat(report.roundsPerformance?.summary?.roundsCompletionRate) >= 60 ? 'text-yellow-600' :
+                                                                'text-red-600'
+                                                            }`}>
+                                                            {report.roundsPerformance?.summary?.roundsCompletionRate || '0%'}
+                                                        </div>
+                                                        <div className="text-sm text-gray-600">Rounds Completion</div>
+                                                    </div>
+                                                    <div className="text-center">
+                                                        <div className="text-lg font-bold text-indigo-600">
+                                                            {report.summary?.efficiency || '0%'}
+                                                        </div>
+                                                        <div className="text-sm text-gray-600">Overall Efficiency</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Detailed Rounds Performance Table */}
+                                            <div className="p-6">
+                                                <div className="flex justify-between items-center mb-4">
+                                                    <h4 className="text-md font-medium text-gray-900">Detailed Patrol Rounds</h4>
+                                                    <div className="text-sm text-gray-500">
+                                                        Total Records: {report.detailedRounds?.length || 0}
+                                                    </div>
+                                                </div>
+
+                                                {report.detailedRounds && report.detailedRounds.length > 0 ? (
+                                                    <div className="overflow-x-auto">
+                                                        <table className="min-w-full divide-y divide-gray-200">
+                                                            <thead className="bg-gray-50">
+                                                                <tr>
+                                                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                                        Date
+                                                                    </th>
+                                                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                                        Round
+                                                                    </th>
+                                                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                                        Plan Name
+                                                                    </th>
+                                                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                                        Checkpoint
+                                                                    </th>
+                                                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                                        Actual Time
+                                                                    </th>
+                                                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                                        Status
+                                                                    </th>
+                                                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                                        Distance
+                                                                    </th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody className="bg-white divide-y divide-gray-200">
+                                                                {report.detailedRounds.map((round, idx) => (
+                                                                    <tr key={idx} className="hover:bg-gray-50">
+                                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                                                                            {formatDateTimeForDisplay(round.date).split(' ').slice(0, 3).join(' ')}
+                                                                        </td>
+                                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                                                                            Round {round.roundNumber}
+                                                                        </td>
+                                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 font-medium">
+                                                                            {round.planName || 'N/A'}
+                                                                        </td>
+                                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                                                                            <div>
+                                                                                <div className="font-medium">{round.checkpointName}</div>
+                                                                                {round.checkpointDescription && (
+                                                                                    <div className="text-xs text-gray-400">{round.checkpointDescription}</div>
+                                                                                )}
+                                                                            </div>
+                                                                        </td>
+                                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                                                                            {round.actualTime ? formatTimeForDisplay(round.actualTime).split(' ').slice(0, 2).join(' ') : 'Not Scanned'}
+                                                                        </td>
+                                                                        <td className="px-4 py-3 whitespace-nowrap">
+                                                                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${round.status === 'completed' ? 'bg-green-100 text-green-800' :
+                                                                                round.status === 'missed' ? 'bg-red-100 text-red-800' :
+                                                                                    'bg-gray-100 text-gray-800'
+                                                                                }`}>
+                                                                                {round.status ? round.status.charAt(0).toUpperCase() + round.status.slice(1) : 'Pending'}
+                                                                            </span>
+                                                                        </td>
+                                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                                                                            {round.distanceMeters ? `${round.distanceMeters}m` : 'N/A'}
+                                                                        </td>
+                                                                    </tr>
+                                                                ))}
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                ) : (
+                                                    <div className="text-center py-8 bg-gray-50 rounded-lg">
+                                                        <Target className="mx-auto h-8 w-8 text-gray-400" />
+                                                        <p className="mt-2 text-sm text-gray-500">No patrol rounds data available for this period</p>
+                                                        <p className="text-xs text-gray-400">The guard may not have any assigned patrol plans or scans</p>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+
+
+
 
                     {/* CREATE/EDIT MODAL */}
                     {showModal && (
@@ -2176,7 +2223,7 @@ const EmployeeDashboard = () => {
                                                         className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
                                                         placeholder="9909090909"
                                                         maxLength="10"
-                                                        // pattern="[0-9]{10}"
+                                                    // pattern="[0-9]{10}"
                                                     />
                                                     {errors.phone && <p className="text-red-500 text-xs mt-1">{errors.phone.message}</p>}
                                                 </div>
@@ -2222,7 +2269,7 @@ const EmployeeDashboard = () => {
                                                         className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
                                                         placeholder="9909090909"
                                                         maxLength="10"
-                                                        // pattern="[0-9]{10}"
+                                                    // pattern="[0-9]{10}"
                                                     />
                                                     {errors.phone && <p className="text-red-500 text-xs mt-1">{errors.phone.message}</p>}
                                                 </div>
