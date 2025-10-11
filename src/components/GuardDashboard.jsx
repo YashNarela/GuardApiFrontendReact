@@ -220,7 +220,7 @@ const handleLogout = async () => {
 
             // Append text fields
             formData.append("title", data.title);
-            formData.append("description", data.description);
+            formData.append("qrId", data.qrId);
             formData.append("type", data.type);
             formData.append("severity", data.severity || "medium");
 
@@ -769,16 +769,16 @@ const handleLogout = async () => {
                             </div> */}
 
                             {/* Description */}
-                            {/* <div>
-                                <label className="block text-sm font-medium text-gray-700">Description</label>
-                                <textarea
-                                    {...register('description', { required: 'Description is required' })}
-                                    rows={3}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700">QR ID</label>
+                                <input
+                                    {...register('qrId')}
+                                    type="text"
                                     className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm 
-                           focus:outline-none focus:ring-red-500 focus:border-red-500"
+           focus:outline-none focus:ring-red-500 focus:border-red-500"
+                                    placeholder="Enter QR Code ID"
                                 />
-                                {errors.description && <p className="mt-1 text-sm text-red-600">{errors.description.message}</p>}
-                            </div> */}
+                            </div>
 
                             {/* Type */}
                             {/* <div>

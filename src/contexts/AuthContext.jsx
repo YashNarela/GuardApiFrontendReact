@@ -110,7 +110,7 @@ export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
 
-    // Set up axios defaults
+ 
     useEffect(() => {
         axios.defaults.baseURL = import.meta.env.VITE_API_BASE_URL;
         const token = localStorage.getItem('token');
@@ -136,6 +136,13 @@ export const AuthProvider = ({ children }) => {
         try {
             const response = await axios.post('/api/auth/login', loginData); // Send the object directly
             const { user: userData, token } = response.data.data;
+
+
+            // if (userData.role === 'guard') {
+            //     toast.error('Guards are not allowed to access the dashboard');
+            //     return false;
+            // }
+
 
             localStorage.setItem('token', token);
             localStorage.setItem('user', JSON.stringify(userData));

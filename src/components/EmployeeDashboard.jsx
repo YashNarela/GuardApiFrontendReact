@@ -45,7 +45,33 @@ const EmployeeDashboard = () => {
     const [generatingReport, setGeneratingReport] = useState(false);
 
 
+
+
+
+
     const [expandedSupervisors, setExpandedSupervisors] = useState(new Set());
+    const [expandedPlanGuards, setExpandedPlanGuards] = useState(new Set());
+    const [expandedPlanCheckpoints, setExpandedPlanCheckpoints] = useState(new Set());
+
+    const togglePlanGuardsExpansion = (planId) => {
+        const newExpanded = new Set(expandedPlanGuards);
+        if (newExpanded.has(planId)) {
+            newExpanded.delete(planId);
+        } else {
+            newExpanded.add(planId);
+        }
+        setExpandedPlanGuards(newExpanded);
+    };
+
+    const togglePlanCheckpointsExpansion = (planId) => {
+        const newExpanded = new Set(expandedPlanCheckpoints);
+        if (newExpanded.has(planId)) {
+            newExpanded.delete(planId);
+        } else {
+            newExpanded.add(planId);
+        }
+        setExpandedPlanCheckpoints(newExpanded);
+    };
 
     const toggleSupervisorExpansion = (supervisorId) => {
         const newExpanded = new Set(expandedSupervisors);
@@ -1287,7 +1313,7 @@ const EmployeeDashboard = () => {
                                                         </th>
                                                     </tr>
                                                 </thead>
-                                                <tbody className="bg-white divide-y divide-gray-200">
+                                                {/* <tbody className="bg-white divide-y divide-gray-200">
                                                     {patrolPlans.map((plan) => (
                                                         <tr key={plan._id} className="hover:bg-gray-50">
                                                             <td className="px-6 py-4">
@@ -1305,7 +1331,7 @@ const EmployeeDashboard = () => {
                                                                             {plan.description || 'No description available'}
                                                                         </p>
                                                                         <div className="mt-2 text-xs text-gray-400">
-                                                                            Updated: {new Date(plan.updatedAt).toLocaleDateString()}
+                                                                            Updated: {moment(plan.updatedAt).format('MMM DD, YYYY h:mm A')}
                                                                         </div>
                                                                     </div>
                                                                 </div>
@@ -1331,7 +1357,8 @@ const EmployeeDashboard = () => {
                                                                         </div>
                                                                     )}
                                                                     <div className="text-xs text-gray-500">
-                                                                        {new Date(plan.startDate).toLocaleDateString()} - {new Date(plan.endDate).toLocaleDateString()}
+                                                                        {moment(plan.startDate).format('MMM DD, YYYY')}
+                                                                        {plan.endDate ? ` - ${moment(plan.endDate).format('MMM DD, YYYY')}` : ' - No end date'}
                                                                     </div>
                                                                 </div>
                                                             </td>
@@ -1382,7 +1409,149 @@ const EmployeeDashboard = () => {
                                                             </td>
                                                         </tr>
                                                     ))}
-                                                </tbody>
+                                                </tbody> */}
+
+                                                    <tbody className="bg-white divide-y divide-gray-200">
+                                                        {patrolPlans.map((plan) => {
+                                                            const showAllGuards = plan.assignedGuards?.length > 3;
+                                                            const showAllCheckpoints = plan.checkpoints?.length > 3;
+
+                                                            const displayedGuards = expandedPlanGuards.has(plan._id)
+                                                                ? plan.assignedGuards
+                                                                : plan.assignedGuards?.slice(0, 3);
+
+                                                            const displayedCheckpoints = expandedPlanCheckpoints.has(plan._id)
+                                                                ? plan.checkpoints
+                                                                : plan.checkpoints?.slice(0, 3);
+
+                                                            return (
+                                                                <tr key={plan._id} className="hover:bg-gray-50">
+                                                                    <td className="px-6 py-4">
+                                                                        <div className="flex items-start space-x-3">
+                                                                            <div className="flex-1 min-w-0">
+                                                                                <div className="flex items-center space-x-2">
+                                                                                    <h3 className="text-sm font-semibold text-gray-900 truncate">
+                                                                                        {plan.planName}
+                                                                                    </h3>
+                                                                                    <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                                                                                        {plan.rounds} round{plan.rounds !== 1 ? 's' : ''}
+                                                                                    </span>
+                                                                                </div>
+                                                                                <p className="text-sm text-gray-500 mt-1 line-clamp-2">
+                                                                                    {plan.description || 'No description available'}
+                                                                                </p>
+                                                                                <div className="mt-2 text-xs text-gray-400">
+                                                                                    Updated: {moment(plan.updatedAt).format('MMM DD, YYYY h:mm A')}
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                    </td>
+
+                                                                    <td className="px-6 py-4 whitespace-nowrap">
+                                                                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${plan.isActive
+                                                                                ? 'bg-green-100 text-green-800'
+                                                                                : 'bg-gray-100 text-gray-800'
+                                                                            }`}>
+                                                                            {plan.isActive ? 'Active' : 'Inactive'}
+                                                                        </span>
+                                                                    </td>
+
+                                                                    <td className="px-6 py-4">
+                                                                        <div className="text-sm text-gray-900 space-y-1">
+                                                                            <div className="capitalize">
+                                                                                <span className="font-medium">Frequency:</span> {plan.frequency}
+                                                                            </div>
+                                                                            {plan.frequency === 'custom' && plan.customFrequency?.days && (
+                                                                                <div className="text-xs text-gray-600">
+                                                                                    Days: {plan.customFrequency.days.join(', ')}
+                                                                                </div>
+                                                                            )}
+                                                                            <div className="text-xs text-gray-500">
+                                                                                {moment(plan.startDate).format('MMM DD, YYYY')}
+                                                                                {plan.endDate ? ` - ${moment(plan.endDate).format('MMM DD, YYYY')}` : ' - No end date'}
+                                                                            </div>
+                                                                        </div>
+                                                                    </td>
+
+                                                                    {/* Guards Column with Expandable Feature */}
+                                                                    <td className="px-6 py-4">
+                                                                        <div className="space-y-2">
+                                                                            {displayedGuards && displayedGuards.length > 0 ? (
+                                                                                <>
+                                                                                    {displayedGuards.map((assignment, index) => (
+                                                                                        <div key={index} className="flex items-center space-x-2 text-sm">
+                                                                                            <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                                                                                            <span className="font-medium text-gray-900">
+                                                                                                {assignment.guardId?.name || 'Unknown Guard'}
+                                                                                            </span>
+                                                                                            {assignment.guardId?.phone && (
+                                                                                                <span className="text-gray-500 text-xs">
+                                                                                                    ({assignment.guardId.phone})
+                                                                                                </span>
+                                                                                            )}
+                                                                                        </div>
+                                                                                    ))}
+                                                                                    {showAllGuards && !expandedPlanGuards.has(plan._id) && (
+                                                                                        <button
+                                                                                            onClick={() => togglePlanGuardsExpansion(plan._id)}
+                                                                                            className="text-xs text-blue-600 font-medium hover:text-blue-800 transition-colors"
+                                                                                        >
+                                                                                            +{plan.assignedGuards.length - 3} more guards
+                                                                                        </button>
+                                                                                    )}
+                                                                                    {expandedPlanGuards.has(plan._id) && (
+                                                                                        <button
+                                                                                            onClick={() => togglePlanGuardsExpansion(plan._id)}
+                                                                                            className="text-xs text-gray-600 font-medium hover:text-gray-800 transition-colors"
+                                                                                        >
+                                                                                            Show less
+                                                                                        </button>
+                                                                                    )}
+                                                                                </>
+                                                                            ) : (
+                                                                                <span className="text-sm text-gray-400 italic">No guards assigned</span>
+                                                                            )}
+                                                                        </div>
+                                                                    </td>
+
+                                                                    {/* Checkpoints Column with Expandable Feature */}
+                                                                    <td className="px-6 py-4">
+                                                                        <div className="text-sm text-gray-900">
+                                                                            <div className="font-medium mb-2">
+                                                                                {plan.checkpoints?.length || 0} checkpoint{(plan.checkpoints?.length || 0) !== 1 ? 's' : ''}
+                                                                            </div>
+                                                                            {displayedCheckpoints && displayedCheckpoints.map((checkpoint, index) => (
+                                                                                <div key={index} className="text-xs text-gray-600 flex items-center space-x-1 mb-1">
+                                                                                    <div className={`w-2 h-2 rounded-full ${checkpoint.isActive ? 'bg-green-500' : 'bg-gray-300'
+                                                                                        }`}></div>
+                                                                                    <span className="truncate">
+                                                                                        {checkpoint.qrId?.siteId || 'Unknown Site'}
+                                                                                        {checkpoint.sequence && ` (#${checkpoint.sequence})`}
+                                                                                    </span>
+                                                                                </div>
+                                                                            ))}
+                                                                            {showAllCheckpoints && !expandedPlanCheckpoints.has(plan._id) && (
+                                                                                <button
+                                                                                    onClick={() => togglePlanCheckpointsExpansion(plan._id)}
+                                                                                    className="text-xs text-blue-600 font-medium hover:text-blue-800 transition-colors"
+                                                                                >
+                                                                                    +{plan.checkpoints.length - 3} more checkpoints
+                                                                                </button>
+                                                                            )}
+                                                                            {expandedPlanCheckpoints.has(plan._id) && (
+                                                                                <button
+                                                                                    onClick={() => togglePlanCheckpointsExpansion(plan._id)}
+                                                                                    className="text-xs text-gray-600 font-medium hover:text-gray-800 transition-colors"
+                                                                                >
+                                                                                    Show less
+                                                                                </button>
+                                                                            )}
+                                                                        </div>
+                                                                    </td>
+                                                                </tr>
+                                                            );
+                                                        })}
+                                                    </tbody>
                                             </table>
                                         </div>
                                     ) : (
@@ -1512,6 +1681,35 @@ const EmployeeDashboard = () => {
                                                                                          </div>
                                                                                      </div>
                                                                                  )}
+     <div>
+                                                                     <div className="text-xs font-medium text-gray-500">Reported At</div>
+                                                                     <div className="text-sm text-gray-900">
+                                                                         {moment(incident.createdAt).format('MMM DD, YYYY')}
+                                                                     </div>
+                                                                     <div className="text-xs text-gray-500">
+                                                                         {moment(incident.createdAt).format('h:mm A')}
+                                                                     </div>
+
+                                                                                     <div className="space-y-2">
+                                                                                         <div>
+                                                                                             <div className="text-xs font-medium text-gray-500">Location</div>
+                                                                                             <div className="text-sm text-gray-900">
+                                                                                                 {incident.siteInfo?.siteId || incident.qrId?.siteId || "N/A"}
+                                                                                             </div>
+                                                                                         </div>
+
+
+
+
+
+
+                                                                                     </div>
+
+ 
+
+                                                                 </div>
+
+
                                                                              </div>
                                                                          </td>
                  
@@ -1591,7 +1789,7 @@ const EmployeeDashboard = () => {
                                                                                  <option value="closed">Closed</option>
                                                                              </select>
                                                                              <div className="text-xs text-gray-500 mt-1">
-                                                                                 Last updated: {new Date(incident.updatedAt).toLocaleDateString()}
+                                                                                 Last updated: {moment(incident.updatedAt).format('MMM DD, YYYY h:mm A')}
                                                                              </div>
                                                                          </td>
                                                                      </tr>

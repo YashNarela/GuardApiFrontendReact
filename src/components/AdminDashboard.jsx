@@ -39,8 +39,8 @@ const AdminDashboard = () => {
     const createEmployee = async (data) => {
         try {
 
-            const employeData={
-                ...data, role: 'employee' 
+            const employeData = {
+                ...data, role: 'employee'
             }
 
             await axios.post('/api/auth/register', employeData);
@@ -56,10 +56,9 @@ const AdminDashboard = () => {
     };
 
     const updateEmployee = async (data) => {
-        try 
-        {
+        try {
 
-            const filterData={
+            const filterData = {
                 ...data,
 
             }
@@ -256,7 +255,7 @@ const AdminDashboard = () => {
                             </div>
 
 
-                            
+
 
                             <div className="flex justify-end space-x-3 pt-4">
                                 <button

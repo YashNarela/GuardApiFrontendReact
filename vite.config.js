@@ -10,7 +10,7 @@ export default defineConfig({
       "/api": {
         // target: "http://localhost:2042",
 
-        //  target:"https://guardapi.flair-solution.com",
+         target:"https://guardapi.flair-solution.com",
         changeOrigin: true,
         secure: false,
       },
